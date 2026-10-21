@@ -1,30 +1,34 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-ivory: #faf6ee;
-  --color-cream: #f3ead9;
-  --color-apricot: #f2c4a7;
-  --color-apricot-deep: #d98b62;
+  /* 향수 하우스처럼: 검정과 따뜻한 회베이지 면, 금빛 글자 하나 */
+  --color-ivory: #e8e1d6;
+  --color-paper: #f6f2ea;
+  --color-cream: #ddd4c6;
+  --color-apricot: #f1bf9f;
+  --color-apricot-deep: #8b7651;
+  --color-gold: #8b7651;
+  --color-gold-light: #c2ab7c;
   --color-sage: #a9b79a;
-  --color-sage-deep: #6f8262;
-  --color-brown: #5b4636;
-  --color-mute: #8c7a68;
-  --color-line: #e4d6bf;
+  --color-sage-deep: #7a6a48;
+  --color-brown: #0d0c0b;
+  --color-ink: #0d0c0b;
+  --color-mute: #6b6257;
+  --color-line: #cfc5b5;
   --font-serif: var(--font-gowun), "Nanum Myeongjo", serif;
+  --font-display: var(--font-noto-serif), "Nanum Myeongjo", serif;
   --font-sans: var(--font-noto), "Apple SD Gothic Neo", system-ui, sans-serif;
   --font-pen: var(--font-pen-src), "Nanum Pen", cursive;
 }
 
 body {
   background: var(--color-ivory);
-  color: var(--color-brown);
+  color: var(--color-ink);
   font-family: var(--font-sans);
   word-break: keep-all;
   overflow-wrap: anywhere;
   -webkit-tap-highlight-color: transparent;
-  /* 종이 결 */
-  background-image: radial-gradient(rgba(91, 70, 54, 0.05) 1px, transparent 1px);
-  background-size: 6px 6px;
+  overflow-x: clip; /* 첫 화면의 화면 너비 그림 */
 }
 
 :focus-visible {
@@ -33,27 +37,35 @@ body {
 }
 
 @layer components {
+  /* 화면 제목: 획 대비가 큰 명조 */
+  .display {
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+  }
   .btn-main,
   .btn-soft {
-    @apply inline-flex min-h-16 items-center justify-center rounded-2xl px-7 text-lg font-medium transition-colors duration-150 select-none disabled:cursor-not-allowed disabled:opacity-40;
+    @apply inline-flex min-h-16 items-center justify-center rounded-[2px] px-8 text-lg font-medium tracking-[0.06em] transition-colors duration-150 select-none disabled:cursor-not-allowed disabled:opacity-30;
   }
   .btn-main {
-    @apply bg-brown text-ivory active:bg-[#3f2f23];
+    @apply bg-ink text-paper active:bg-[#2a2622];
   }
   .btn-soft {
-    @apply border-2 border-line bg-white/70 text-brown active:bg-cream;
+    @apply border-[1.5px] border-ink bg-transparent text-ink active:bg-ink/10;
   }
+  /* 금빛 글자 링크 */
   .btn-text {
-    @apply inline-flex min-h-12 items-center px-2 text-base text-mute underline underline-offset-4 active:text-brown;
+    @apply inline-flex min-h-12 items-center gap-2 px-2 text-base font-medium tracking-[0.08em] text-gold active:text-ink;
   }
   .choice {
-    @apply flex min-h-18 w-full items-center rounded-2xl border-2 border-line bg-white/70 px-6 py-4 text-left text-lg leading-snug transition-colors duration-150 active:bg-cream;
+    @apply flex min-h-18 w-full items-center rounded-[2px] border border-ink/20 bg-paper/60 px-6 py-4 text-left text-lg leading-snug transition-colors duration-150 active:bg-cream;
   }
   .choice[aria-pressed="true"] {
-    @apply border-brown bg-cream font-medium;
+    @apply border-ink bg-ink text-paper;
   }
   .field {
-    @apply w-full rounded-2xl border-2 border-line bg-white/80 p-5 text-xl leading-relaxed placeholder:text-mute/60 focus:border-apricot-deep focus:outline-none;
+    @apply w-full rounded-[2px] border border-ink/25 bg-paper/80 p-5 text-xl leading-relaxed placeholder:text-mute/60 focus:border-ink focus:outline-none;
   }
 }
 

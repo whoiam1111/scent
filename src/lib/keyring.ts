@@ -8,7 +8,7 @@ export const KEYRING_SIZE = 1500;
 
 export type Theme = "book" | "perfume" | "note" | "polaroid" | "ticket" | "pieces";
 
-type Input = { theme: Theme; svg: string; title: string; line: string; emotions: string[]; date: Date; transparent: boolean };
+type Input = { theme: Theme; svg: string; title: string; line: string; emotions: string[]; date: Date; transparent: boolean; font?: "auto" | "serif" | "sans" | "pen"; align?: "auto" | "left" | "center" | "right"; bg?: { fill: string; light: boolean } | null };
 
 const S = KEYRING_SIZE;
 const IVORY = "#fbf6ec";
@@ -59,12 +59,13 @@ const TORN: [number, number][] = [
 ];
 const torn = (x: number, y: number, w: number, h: number) => TORN.map(([a, b]) => [x + a * w, y + b * h] as [number, number]);
 
-export async function renderKeyring({ theme, svg, title, line, emotions, date, transparent }: Input): Promise<Blob> {
+export async function renderKeyring({ theme, svg, title, line, emotions, date, transparent, font = "auto", align = "auto", bg = null }: Input): Promise<Blob> {
   const css = getComputedStyle(document.documentElement);
   const serif = css.getPropertyValue("--font-gowun").trim() || "serif";
   const pen = css.getPropertyValue("--font-pen-src").trim() || "cursive";
+  const sans = css.getPropertyValue("--font-noto").trim() || "sans-serif";
   // 화면에 아직 안 쓰인 글꼴은 직접 불러 와야 캔버스에 나온다
-  await Promise.all([document.fonts.load(`700 100px ${serif}`, title + line), document.fonts.load(`400 100px ${pen}`, title + line)]).catch(() => {});
+  await Promise.all([document.fonts.load(`700 100px ${serif}`, title + line), document.fonts.load(`400 100px ${pen}`, title + line), document.fonts.load(`700 100px ${sans}`, title + line)]).catch(() => {});
 
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = S;
@@ -80,10 +81,22 @@ export async function renderKeyring({ theme, svg, title, line, emotions, date, t
   img.src = svgToDataUrl(svg);
   await img.decode();
 
+  // 참가자가 고른 글꼴·정렬은 제목과 감정 줄에만 쓴다. box = 글자가 놓일 [왼쪽 끝, 오른쪽 끝]
+  const fam = (def: string) => ({ auto: def, serif, sans, pen })[font];
+  const main = (text: string, box: [number, number], y: number, o: Omit<Parameters<typeof write>[4], "max">) => {
+    const al = align === "auto" ? (o.align ?? "left") : align;
+    const x = al === "center" ? (box[0] + box[1]) / 2 : al === "right" ? box[1] : box[0];
+    const boost = font === "pen" && o.family !== pen ? 1.3 : 1; // 손글씨는 글자 몸이 작다
+    write(ctx, text, x, y, { ...o, size: o.size * boost, family: fam(o.family), align: al, max: box[1] - box[0] });
+  };
+
   const pal = EMOTION_COLORS[emotions[0]] ?? EMOTION_COLORS["기타"];
   const feel = emotions.join(", ");
   const day = date.toLocaleDateString("ko-KR");
-  const body = (r: number, fill: string) => {
+  // 참가자가 배경색을 고르면 바탕 면만 그 색으로, 글자는 밝기에 맞춰 바꾼다 (DiaryCard의 surface와 같은 규칙)
+  const tone = (defText: string) => (!bg ? defText : !bg.light ? IVORY : defText === IVORY ? "#141210" : defText);
+  const body = (r: number, def: string) => {
+    const fill = bg?.fill ?? def;
     ctx.beginPath();
     ctx.roundRect(60, 60, S - 120, S - 120, r);
     ctx.fillStyle = fill;
@@ -95,12 +108,14 @@ export async function renderKeyring({ theme, svg, title, line, emotions, date, t
     ctx.fillStyle = IVORY;
     ctx.fillRect(186, 176, 1128, 846);
     cover(ctx, img, 210, 200, 1080, 798);
-    write(ctx, title, 210, 1190, { size: 140, max: 1080, family: serif, weight: "700", color: IVORY });
-    write(ctx, feel, 210, 1282, { size: 68, max: 1080, family: serif, color: IVORY, min: 48 });
-    write(ctx, "마음의 조각", 210, 1368, { size: 54, max: 600, family: serif, color: IVORY });
+    const t = tone(IVORY);
+    main(title, [210, 1290], 1190, { size: 140, family: serif, weight: "700", color: t });
+    main(feel, [210, 1290], 1282, { size: 68, family: serif, color: t, min: 48 });
+    write(ctx, "마음의 조각", 210, 1368, { size: 54, max: 600, family: serif, color: t });
   } else if (theme === "perfume") {
     body(90, "#f4efe6");
-    ctx.strokeStyle = INK;
+    const t = tone(INK);
+    ctx.strokeStyle = t;
     ctx.lineWidth = 8;
     ctx.beginPath();
     ctx.roundRect(110, 110, S - 220, S - 220, 54);
@@ -117,11 +132,11 @@ export async function renderKeyring({ theme, svg, title, line, emotions, date, t
       ctx.lineTo(x + w, y + h);
       ctx.closePath();
     }, () => cover(ctx, img, x, y, w, h));
-    write(ctx, title, S / 2, 1100, { size: 136, max: 1060, family: serif, weight: "700", color: INK, align: "center" });
-    write(ctx, `${feel}의 향`, S / 2, 1200, { size: 68, max: 1060, family: serif, color: pal.accent, align: "center", min: 48 });
-    write(ctx, "마음의 조각", S / 2, 1310, { size: 54, max: 600, family: serif, color: INK, align: "center" });
+    main(title, [220, 1280], 1100, { size: 136, family: serif, weight: "700", color: t, align: "center" });
+    main(`${feel}의 향`, [220, 1280], 1200, { size: 68, family: serif, color: pal.accent, align: "center", min: 48 });
+    write(ctx, "마음의 조각", S / 2, 1310, { size: 54, max: 600, family: serif, color: t, align: "center" });
   } else if (theme === "note") {
-    const ink = "#3d3a5c", red = "rgba(201,91,91,.55)";
+    const ink = tone("#3d3a5c"), red = "rgba(201,91,91,.55)";
     body(12, "#fffdf6");
     ctx.strokeStyle = ink;
     ctx.lineWidth = 10;
@@ -131,7 +146,7 @@ export async function renderKeyring({ theme, svg, title, line, emotions, date, t
     ctx.fillStyle = ink;
     ctx.fillRect(70, 205, S - 140, 10);
     ctx.fillRect(70, 905, S - 140, 10);
-    write(ctx, `제목: ${title}`, 160, 1020, { size: 92, max: 1180, family: pen, color: ink });
+    main(`제목: ${title}`, [160, 1340], 1020, { size: 92, family: pen, color: ink });
     // 원고지 한 줄: 첫 문장 앞 9글자
     const cols = 9, cw = 1200 / cols, top = 1075;
     const chars = [...line].slice(0, cols);
@@ -141,12 +156,15 @@ export async function renderKeyring({ theme, svg, title, line, emotions, date, t
       ctx.strokeRect(150 + i * cw, top, cw, cw);
       if (chars[i]) write(ctx, chars[i], 150 + i * cw + cw / 2, top + cw * 0.72, { size: 96, max: cw, family: pen, color: ink, align: "center" });
     }
-    write(ctx, `오늘의 마음: ${feel}`, 160, 1345, { size: 82, max: 1180, family: pen, color: ink, min: 56 });
+    main(`오늘의 마음: ${feel}`, [160, 1340], 1345, { size: 82, family: pen, color: ink, min: 56 });
   } else if (theme === "polaroid") {
     body(10, "#ffffff");
     cover(ctx, img, 160, 160, S - 320, 980);
-    write(ctx, title, 170, 1270, { size: 140, max: 1160, family: pen, color: NAVY });
-    write(ctx, `${day} ${feel}`, S - 170, 1370, { size: 76, max: 1000, family: pen, color: "rgba(47,58,86,.65)", align: "right", min: 56 });
+    const t = tone(NAVY);
+    main(title, [170, 1330], 1270, { size: 140, family: pen, color: t });
+    ctx.globalAlpha = 0.65;
+    write(ctx, `${day} ${feel}`, S - 170, 1370, { size: 76, max: 1000, family: pen, color: t, align: "right", min: 56 });
+    ctx.globalAlpha = 1;
   } else if (theme === "ticket") {
     body(48, pal.accent);
     // 절취선 양 끝의 반원 홈은 아예 지운다 (투명이면 재단선이 된다)
@@ -168,9 +186,11 @@ export async function renderKeyring({ theme, svg, title, line, emotions, date, t
       }
     }
     clipped(ctx, () => ctx.roundRect(150, 150, S - 300, 660, 28), () => cover(ctx, img, 150, 150, S - 300, 660));
-    write(ctx, "기억 입장권", 160, 905, { size: 64, max: 1180, family: serif, color: IVORY });
-    write(ctx, title, 160, 1045, { size: 132, max: 1180, family: serif, weight: "700", color: IVORY });
-    ctx.strokeStyle = "rgba(251,246,236,.75)";
+    const t = tone(IVORY);
+    write(ctx, "기억 입장권", 160, 905, { size: 64, max: 1180, family: serif, color: t });
+    main(title, [160, 1340], 1045, { size: 132, family: serif, weight: "700", color: t });
+    ctx.strokeStyle = t;
+    ctx.globalAlpha = 0.75;
     ctx.lineWidth = 8;
     ctx.setLineDash([4, 22]);
     ctx.lineCap = "round";
@@ -179,14 +199,15 @@ export async function renderKeyring({ theme, svg, title, line, emotions, date, t
     ctx.lineTo(S - 170, cut);
     ctx.stroke();
     ctx.setLineDash([]);
-    write(ctx, feel, 160, 1320, { size: 70, max: 700, family: serif, color: IVORY, min: 50 });
-    write(ctx, day, S - 160, 1320, { size: 66, max: 460, family: serif, color: IVORY, align: "right", min: 50 });
+    ctx.globalAlpha = 1;
+    write(ctx, feel, 160, 1320, { size: 70, max: 700, family: serif, color: t, min: 50 });
+    write(ctx, day, S - 160, 1320, { size: 66, max: 460, family: serif, color: t, align: "right", min: 50 });
   } else {
     // pieces: 찢은 종이 모양 바탕 위에 비뚤게 붙인 그림과 메모
     ctx.beginPath();
     poly(ctx, torn(60, 60, S - 120, S - 120));
     ctx.closePath();
-    ctx.fillStyle = pal.sky[1];
+    ctx.fillStyle = bg?.fill ?? pal.sky[1];
     ctx.fill();
     ctx.save();
     ctx.translate(S / 2, 560);
@@ -205,8 +226,8 @@ export async function renderKeyring({ theme, svg, title, line, emotions, date, t
     ctx.fillRect(-520, -175, 1040, 330);
     ctx.fillStyle = `${pal.accent}99`;
     ctx.fillRect(300, -200, 200, 60);
-    write(ctx, title, -460, -30, { size: 124, max: 920, family: serif, weight: "700", color: INK });
-    write(ctx, feel, -460, 90, { size: 68, max: 920, family: serif, color: "#8c7a68", min: 48 });
+    main(title, [-460, 460], -30, { size: 124, family: serif, weight: "700", color: INK });
+    main(feel, [-460, 460], 90, { size: 68, family: serif, color: "#8c7a68", min: 48 });
     ctx.restore();
   }
 

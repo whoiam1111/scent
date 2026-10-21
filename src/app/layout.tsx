@@ -1,8 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { Gowun_Batang, Nanum_Pen_Script, Noto_Sans_KR } from "next/font/google";
+import { Gowun_Batang, Nanum_Pen_Script, Noto_Sans_KR, Noto_Serif_KR } from "next/font/google";
 import "./globals.css";
 
 const serif = Gowun_Batang({ variable: "--font-gowun", weight: ["400", "700"], subsets: ["latin"], preload: false });
+// 화면 제목: 획 대비가 큰 명조
+const display = Noto_Serif_KR({ variable: "--font-noto-serif", weight: ["500", "700"], subsets: ["latin"], preload: false });
 // 그림일기장·폴라로이드의 손글씨
 const pen = Nanum_Pen_Script({ variable: "--font-pen-src", weight: "400", subsets: ["latin"], preload: false });
 const sans = Noto_Sans_KR({ variable: "--font-noto", weight: ["400", "500", "700"], subsets: ["latin"], preload: false });
@@ -13,11 +15,11 @@ export const metadata: Metadata = {
 };
 
 // 태블릿 키오스크: 확대 없이 화면에 맞춘다
-export const viewport: Viewport = { width: "device-width", initialScale: 1, maximumScale: 1, themeColor: "#faf6ee" };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, maximumScale: 1, themeColor: "#0d0c0b" };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="ko" className={`${serif.variable} ${sans.variable} ${pen.variable}`}>
+    <html lang="ko" className={`${serif.variable} ${sans.variable} ${pen.variable} ${display.variable}`}>
       <body>{children}</body>
     </html>
   );

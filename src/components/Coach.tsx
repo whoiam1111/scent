@@ -112,7 +112,7 @@ function Sheet({ row, onDelete }: { row: HeartRow; onDelete: () => void }) {
   const scores = scoreHeart(new Set(row.checks));
   const top = scores.filter((x) => x.ratio === scores[0].ratio);
   return (
-    <article className="rounded-3xl border-2 border-line bg-white/70 p-6 sm:p-8">
+    <article className="rounded-[2px] border border-line bg-paper p-6 sm:p-8">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <p className="text-lg text-mute">
           <b className="font-serif text-2xl text-brown">{row.name}</b> · 상담 번호 <b className="text-brown tracking-widest">{row.code}</b> · {new Date(row.created_at).toLocaleString("ko-KR")}
