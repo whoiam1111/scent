@@ -9,12 +9,13 @@ import { demoDiary, detectScene } from "@/lib/diary";
 const aiEnabled = () => Boolean(process.env.ANTHROPIC_API_KEY);
 
 export function GET() {
-  return Response.json({ ai: aiEnabled() });
+  return Response.json({ ai: aiEnabled(), picture: Boolean(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN) });
 }
 
 const Body = z.object({
   memory: z.string().trim().min(1).max(1000),
   emotions: z.array(z.string().trim().min(1).max(20)).min(1).max(2),
+  details: z.string().trim().max(300).optional(), // 그림에만 쓰는 덧붙임 (옷차림·날씨 등)
 });
 
 const Output = z.object({
@@ -23,6 +24,7 @@ const Output = z.object({
   scene: z.enum(["sea", "mountain", "city", "home", "food", "flower", "music", "travel", "field"]),
   sky: z.enum(["day", "sunset", "night", "rain", "snow"]),
   people: z.union([z.literal(0), z.literal(1), z.literal(2)]),
+  picture: z.string(),
 });
 
 const SYSTEM = `당신은 오프라인 팝업 '마음의 조각'에서 참가자의 기억으로 짧은 그림 일기를 써 주는 편집자입니다.
@@ -33,12 +35,13 @@ const SYSTEM = `당신은 오프라인 팝업 '마음의 조각'에서 참가자
 - text는 1~3문장, 일기처럼 담백한 1인칭 한국어. 문장마다 줄바꿈(\\n)으로 구분하세요.
 - title은 14자 이내의 짧고 시적인 제목.
 - 감정을 진단하거나 평가하지 말고, 조언이나 위로의 말도 덧붙이지 마세요.
-- scene, sky, people은 그림을 그리기 위한 단서입니다. 기억에 드러난 것만 고르고, 드러나지 않으면 scene은 field, sky는 day, people은 0으로 두세요.`;
+- scene, sky, people은 그림을 그리기 위한 단서입니다. 기억에 드러난 것만 고르고, 드러나지 않으면 scene은 field, sky는 day, people은 0으로 두세요.
+- picture는 그림 생성 모델에 줄 영어 한 문장(30단어 이내)입니다. <memory>와 <details>에 나온 장소·물건·옷차림·날씨만 묘사하고, 이름·얼굴·글자는 넣지 마세요. 사람의 성별·나이는 따로 정하니 쓰지 마세요.`;
 
 export async function POST(req: Request) {
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "기억과 감정을 다시 확인해 주세요." }, { status: 400 });
-  const { memory, emotions } = parsed.data;
+  const { memory, emotions, details } = parsed.data;
 
   if (!aiEnabled()) {
     return Response.json({ mode: "demo", ...demoDiary(memory, emotions), hints: detectScene(memory) });
@@ -53,13 +56,13 @@ export async function POST(req: Request) {
       fallbacks: "default",
       output_config: { effort: "low", format: betaZodOutputFormat(Output) },
       system: SYSTEM,
-      messages: [{ role: "user", content: `<memory>\n${memory}\n</memory>\n선택한 감정: ${emotions.join(", ")}` }],
+      messages: [{ role: "user", content: `<memory>\n${memory}\n</memory>\n${details ? `<details>\n${details}\n</details>\n` : ""}선택한 감정: ${emotions.join(", ")}` }],
     });
     if (res.stop_reason === "refusal" || !res.parsed_output) {
       return Response.json({ error: "이 기억으로는 그림 일기를 만들지 못했어요." }, { status: 422 });
     }
-    const { title, text, ...hints } = res.parsed_output;
-    return Response.json({ mode: "ai", title: title.slice(0, 30), text, hints });
+    const { title, text, picture, ...hints } = res.parsed_output;
+    return Response.json({ mode: "ai", title: title.slice(0, 30), text, hints, picture: picture.slice(0, 400) });
   } catch (e) {
     const status = e instanceof Anthropic.APIError ? e.status : undefined;
     console.error("diary generation failed", status ?? (e as Error).name);

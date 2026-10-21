@@ -1,6 +1,11 @@
 // 감정·장면 단서와 데모용 그림 일기 문장 생성 (서버와 브라우저 공용)
 
-export const EMOTIONS = ["기쁨", "편안함", "설렘", "뿌듯함", "사랑스러움", "그리움", "아쉬움", "외로움", "불안", "후련함", "자유로움", "막막함", "감사함", "평온함", "벅참", "기타"] as const;
+// 밝은 감정을 앞에, 아릿하거나 무거운 감정을 뒤에 둔다. 기억 탐색의 느낌(explore.ts feelings)은 모두 이 안에 있다
+export const EMOTIONS = [
+  "기쁨", "행복함", "즐거움", "설렘", "따뜻함", "편안함", "평온함", "감사함",
+  "뿌듯함", "벅참", "사랑스러움", "다정함", "든든함", "안도감", "후련함", "자유로움",
+  "만족스러움", "신기함", "그리움", "아쉬움", "외로움", "불안", "막막함", "기타",
+] as const;
 
 // 감정별 색 — 그림의 하늘/포인트 색으로 쓴다 (아이보리·살구·세이지·브라운 계열 안에서 변주)
 export const EMOTION_COLORS: Record<string, { sky: [string, string]; accent: string }> = {
@@ -19,6 +24,14 @@ export const EMOTION_COLORS: Record<string, { sky: [string, string]; accent: str
   감사함: { sky: ["#fbead2", "#efcfa6"], accent: "#c98a52" },
   평온함: { sky: ["#eaeee4", "#d2dcc8"], accent: "#93a487" },
   벅참: { sky: ["#fde2cd", "#f4b98f"], accent: "#d9754a" },
+  행복함: { sky: ["#fde6cf", "#f6c597"], accent: "#e08a55" },
+  즐거움: { sky: ["#fdebc6", "#f7cf8a"], accent: "#d99a3e" },
+  따뜻함: { sky: ["#fbe4d2", "#efc3a2"], accent: "#c97f5a" },
+  다정함: { sky: ["#fbe6df", "#efc6b8"], accent: "#c98472" },
+  든든함: { sky: ["#e9eadb", "#cfd2b2"], accent: "#8c9465" },
+  안도감: { sky: ["#e6eee8", "#c6d8cc"], accent: "#7f9e8b" },
+  만족스러움: { sky: ["#f8ead0", "#e8cd9c"], accent: "#b98d4f" },
+  신기함: { sky: ["#e6e9f2", "#c7cfe2"], accent: "#7d88aa" },
   기타: { sky: ["#f3ece0", "#e2d4c0"], accent: "#a58a6c" },
 };
 
@@ -37,7 +50,7 @@ const SCENE_WORDS: [Scene, string[]][] = [
 ];
 
 const SKY_WORDS: [Sky, string[]][] = [
-  ["snow", ["눈이 오", "눈 오", "눈이 내", "눈사람", "함박눈", "첫눈"]],
+  ["snow", ["눈이 오", "눈 오", "눈이 내", "눈 내", "눈사람", "함박눈", "첫눈"]],
   ["rain", ["비가", "비 오", "우산", "장마", "빗"]],
   ["night", ["밤", "새벽", "별", "달빛", "야경"]],
   ["sunset", ["노을", "저녁", "해 질", "해질", "석양"]],

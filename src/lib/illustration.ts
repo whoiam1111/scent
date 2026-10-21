@@ -1,4 +1,5 @@
 import { EMOTION_COLORS, detectScene, type SceneHints } from "./diary";
+import { blankFigure, type Figure } from "./figures";
 
 // 기억 문장과 감정으로 그리는 SVG 일러스트 (데모 이미지).
 // 같은 입력이면 같은 그림, 장면 단어·하늘·사람 수·감정 색에 따라 배경·상징물·색감·구도가 달라진다.
@@ -16,11 +17,15 @@ function seeded(text: string) {
 const INK = "#5b4636";
 const PAPER = "#fbf6ec";
 
-function person(x: number, y: number, s: number, color: string) {
-  return `<g transform="translate(${x} ${y}) scale(${s})"><circle cx="0" cy="-118" r="26" fill="${INK}"/><path d="M-34 0 Q-38 -78 0 -84 Q38 -78 34 0 Z" fill="${color}"/></g>`;
+// 뒷모습 인물. 여성은 어깨까지 오는 머리, 60대 이상은 흰머리, 어린이·10대는 작게
+const AGE_SCALE: Record<string, number> = { child: 0.72, teen: 0.9 };
+function person(x: number, y: number, s: number, color: string, f: Figure = blankFigure) {
+  const hair = f.age === "senior" ? "#b5aea5" : INK;
+  const long = f.gender === "female" ? `<path d="M-28 -124 Q-34 -80 -25 -62 Q0 -56 25 -62 Q34 -80 28 -124 Z" fill="${hair}"/>` : "";
+  return `<g transform="translate(${x} ${y}) scale(${s * (AGE_SCALE[f.age] ?? 1)})"><path d="M-34 0 Q-38 -78 0 -84 Q38 -78 34 0 Z" fill="${color}"/><circle cx="0" cy="-118" r="26" fill="${hair}"/>${long}</g>`;
 }
 
-export function buildIllustration(memory: string, emotions: string[], hints: SceneHints = detectScene(memory)): string {
+export function buildIllustration(memory: string, emotions: string[], hints: SceneHints = detectScene(memory), figures?: { me: Figure; mate: Figure }): string {
   const r = seeded(memory + emotions.join());
   const pal = EMOTION_COLORS[emotions[0]] ?? EMOTION_COLORS["기타"];
   const accent2 = (EMOTION_COLORS[emotions[1]] ?? pal).accent;
@@ -126,10 +131,10 @@ export function buildIllustration(memory: string, emotions: string[], hints: Sce
 
   // 사람 — 등장 단어가 있을 때만
   const py = scene === "home" ? 900 : Math.min(horizon + 230, 930);
-  if (people === 1) parts.push(person(500 + (r() - 0.5) * 200, py, 1.3, pal.accent));
+  if (people === 1) parts.push(person(500 + (r() - 0.5) * 200, py, 1.3, pal.accent, figures?.me));
   if (people === 2) {
     const px = 420 + (r() - 0.5) * 160;
-    parts.push(person(px, py, 1.3, pal.accent), person(px + 130, py, 1.2, accent2 === pal.accent ? "#9aad8b" : accent2));
+    parts.push(person(px, py, 1.3, pal.accent, figures?.me), person(px + 130, py, 1.2, accent2 === pal.accent ? "#9aad8b" : accent2, figures?.mate));
   }
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" width="1000" height="1000">

@@ -1,10 +1,10 @@
 /* eslint-disable @next/next/no-img-element -- 런타임에 만든 SVG data URL */
 import { EMOTION_COLORS } from "@/lib/diary";
 import { svgToDataUrl } from "@/lib/illustration";
-import type { Theme } from "@/lib/keyring";
 
 // 그림 일기 카드 6종. 각 디자인은 이 체험에 실제로 있는 물건에서 왔다:
-// 책 표지, 향수 라벨, 원고지 그림일기장, 폴라로이드, 기억 입장권, 찢은 종이 조각. 키링(keyring.ts)도 같은 6종.
+// 책 표지, 향수 라벨, 원고지 그림일기장, 폴라로이드, 기억 입장권, 찢은 종이 조각. 키링 PNG는 이 카드를 그대로 찍는다(cardImage.ts).
+export type Theme = "book" | "perfume" | "note" | "polaroid" | "ticket" | "pieces";
 export const THEMES: [Theme, string][] = [
   ["book", "문학전집"],
   ["perfume", "향수 라벨"],
@@ -49,10 +49,30 @@ export const BGS: [DiaryBg, string, string, boolean][] = [
   ["forest", "숲", "#3c4c3d", false],
   ["black", "먹", "#141210", false],
 ];
+// 글자색·포인트색: "" = 디자인 기본. 포인트색은 표지·입장권 바탕(배경색이 기본일 때), 향 이름 줄, 테이프에 쓰인다
+export const INKS: [string, string][] = [
+  ["", "기본"],
+  ["#141210", "먹"],
+  ["#4a3828", "고동"],
+  ["#2f3a56", "남색"],
+  ["#7a2e3a", "와인"],
+  ["#8b7651", "금색"],
+  ["#f6f2ea", "흰색"],
+];
+export const ACCENTS: [string, string][] = [
+  ["", "기본"],
+  ["#c9694a", "테라코타"],
+  ["#d99a3e", "호박"],
+  ["#7d8a5a", "올리브"],
+  ["#4f7f80", "청록"],
+  ["#34466b", "남색"],
+  ["#8a3b4a", "와인"],
+  ["#2a2622", "먹"],
+];
 const DARK_TEXT = "#141210";
 const LIGHT_TEXT = "#f6f2ea";
 
-type Props = { theme: Theme; title: string; text: string; illustration: string; createdAt: string | null; emotions: string[]; font?: DiaryFont; align?: DiaryAlign; bg?: DiaryBg };
+type Props = { theme: Theme; title: string; text: string; illustration: string; createdAt: string | null; emotions: string[]; font?: DiaryFont; align?: DiaryAlign; bg?: DiaryBg; ink?: string; accent?: string };
 
 // 받침에 따라 과/와: "편안함과 그리움"
 const batchim = (w: string) => {
@@ -61,10 +81,13 @@ const batchim = (w: string) => {
 };
 export const and = (xs: string[]) => xs.map((x, i) => (i < xs.length - 1 ? x + (batchim(x) ? "과" : "와") : x)).join(" ");
 
-export default function DiaryCard({ theme, title, text, illustration, createdAt, emotions, font = "auto", align = "auto", bg = "auto" }: Props) {
+export default function DiaryCard({ theme, title, text, illustration, createdAt, emotions, font = "auto", align = "auto", bg = "auto", ink = "", accent = "" }: Props) {
   // 바탕 면의 색과 그 위 글자색. def = 디자인 기본 바탕, defText = 기본 글자색
   const [, , fill, light] = BGS.find(([id]) => id === bg) ?? BGS[0];
-  const surface = (def: string, defText: string) => (fill ? { background: fill, color: light ? (defText === LIGHT_TEXT ? DARK_TEXT : defText) : LIGHT_TEXT } : { background: def, color: defText });
+  const surface = (def: string, defText: string) => {
+    const base = fill ? { background: fill, color: light ? (defText === LIGHT_TEXT ? DARK_TEXT : defText) : LIGHT_TEXT } : { background: def, color: defText };
+    return ink ? { ...base, color: ink } : base;
+  };
   // 제목·일기·감정 줄에만 적용. "기본"이면 디자인마다 정해 둔 글꼴·정렬을 쓴다
   // 손글씨는 글자 몸이 작아서, 손글씨가 기본이 아닌 디자인에 고르면 한 단계 크게 쓴다
   const f = (def: string, size: string) => {
@@ -73,9 +96,10 @@ export default function DiaryCard({ theme, title, text, illustration, createdAt,
     return `${font === "serif" ? "font-serif" : "font-sans"} ${size}`;
   };
   const a = align === "auto" ? "" : { left: "text-left", center: "text-center", right: "text-right" }[align];
-  const img = svgToDataUrl(illustration);
+  const img = illustration.startsWith("data:") ? illustration : svgToDataUrl(illustration); // 생성형 그림은 이미 data URL
   const date = createdAt ? new Date(createdAt) : null;
-  const pal = EMOTION_COLORS[emotions[0]] ?? EMOTION_COLORS["기타"];
+  const emo = EMOTION_COLORS[emotions[0]] ?? EMOTION_COLORS["기타"];
+  const pal = accent ? { ...emo, accent } : emo;
   const alt = "기억과 감정으로 그린 그림";
 
   if (theme === "perfume")

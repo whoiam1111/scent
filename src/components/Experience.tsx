@@ -1,15 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { categories, feelingToEmotion, nextStep, summarize, UNSURE, whenOptions, type Answers, type Category, type StepId } from "@/lib/explore";
+import { categories, nextStep, summarize, WHO, whenOptions, type Answers, type Category, type StepId } from "@/lib/explore";
 import { demoDiary, detectScene, EMOTIONS, type SceneHints } from "@/lib/diary";
 import { buildIllustration } from "@/lib/illustration";
-import { renderKeyring, type Theme } from "@/lib/keyring";
-import DiaryCard, { ALIGNS, BGS, FONTS, THEMES, type DiaryAlign, type DiaryBg, type DiaryFont } from "@/components/DiaryCard";
-import { heartPages, itemKey, scoreHeart } from "@/lib/heart";
+import { AGES, blankFigure, figureFor, GENDERS, guessMate, PICTURE_STYLES, type Figure, type Figures } from "@/lib/figures";
+import { cardToPng } from "@/lib/cardImage";
+import DiaryCard, { ACCENTS, ALIGNS, BGS, FONTS, INKS, THEMES, type DiaryAlign, type DiaryBg, type DiaryFont, type Theme } from "@/components/DiaryCard";
+import { AREAS, areaItems, heartPages, itemKey, scoreHeart } from "@/lib/heart";
 import { NOTES, SCENTS } from "@/lib/scent";
 
-type Screen = "start" | "write" | "cats" | "questions" | "step" | "summary" | "none" | "today" | "emotion" | "heart" | "heartArea" | "heartResult" | "generating" | "error" | "result";
+type Screen = "start" | "write" | "cats" | "questions" | "step" | "summary" | "none" | "today" | "emotion" | "figures" | "heart" | "heartArea" | "heartResult" | "generating" | "error" | "result";
 type GenerationMode = "ai" | "demo" | "demo-fallback";
 
 // 참가자 한 명의 체험 상태. 서버에 저장하지 않고, 다시하기를 누르면 통째로 비운다.
@@ -27,11 +28,13 @@ type State = {
   suggestedEmotion: string | null;
   heartChecks: string[];
   heartCode: string | null;
+  figures: Figures;
   diaryTitle: string;
   diaryText: string;
   illustration: string;
   createdAt: string | null;
   generationMode: GenerationMode | null;
+  pictureAi: boolean; // 그림을 생성형 AI로 만들었는지 (아니면 템플릿)
 };
 
 const initial: State = {
@@ -48,16 +51,18 @@ const initial: State = {
   suggestedEmotion: null,
   heartChecks: [],
   heartCode: null,
+  figures: { me: blankFigure, mate: blankFigure, who: "", note: "", style: "watercolor" },
   diaryTitle: "",
   diaryText: "",
   illustration: "",
   createdAt: null,
   generationMode: null,
+  pictureAi: false,
 };
 
 const TIMEOUT_MS = 30_000;
 const IDLE_MS = 4 * 60_000;
-const loadingLines = ["기억 속 장면을 정리하고 있어요.", "그날의 감정을 담고 있어요.", "당신만의 그림 일기를 만들고 있어요."];
+const loadingLines = ["기억 속 장면을 정리하고 있어요.", "그날의 감정을 담고 있어요.", "곧 완성돼요."];
 
 const stepQuestion: Record<Exclude<StepId, "start">, string> = {
   scene: "어떤 장면이 가장 가까운가요?",
@@ -72,6 +77,7 @@ export default function Experience() {
   const [screen, setScreen] = useState<Screen>("start");
   const [s, setS] = useState<State>(initial);
   const [aiEnabled, setAiEnabled] = useState(false);
+  const [pictureEnabled, setPictureEnabled] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [error, setError] = useState("");
   const [prompt, setPrompt] = useState("친구와 밤늦게까지 이야기했던 날.");
@@ -84,7 +90,10 @@ export default function Experience() {
   useEffect(() => {
     fetch("/api/diary")
       .then((r) => r.json())
-      .then((j) => setAiEnabled(Boolean(j.ai)))
+      .then((j) => {
+        setAiEnabled(Boolean(j.ai));
+        setPictureEnabled(Boolean(j.picture));
+      })
       .catch(() => setAiEnabled(false));
   }, []);
 
@@ -102,15 +111,45 @@ export default function Experience() {
 
   // ── 그림 일기 생성 ──
   const abortRef = useRef<AbortController | null>(null);
-  const finish = (title: string, text: string, hints: SceneHints, mode: GenerationMode) => {
+  const genRef = useRef(0); // 취소하면 늘려서, 늦게 도착한 결과를 버린다
+  const finish = async (title: string, text: string, base: SceneHints, mode: GenerationMode, description?: string) => {
+    const id = genRef.current;
+    go("generating");
+    // 마지막에 더 적은 내용에 장소·날씨·사람이 나오면 그림에 반영한다
+    const extra = detectScene(s.figures.note);
+    const hints: SceneHints = {
+      scene: extra.scene !== "field" ? extra.scene : base.scene,
+      sky: extra.sky !== "day" ? extra.sky : base.sky,
+      // 그림 속 인물 화면에서 고른 것이 글보다 우선
+      people: s.figures.who === "없음" ? 1 : s.figures.who ? 2 : (Math.max(base.people, extra.people) as SceneHints["people"]),
+    };
+    const picture = pictureEnabled ? await makePicture(hints, description) : null;
+    if (genRef.current !== id) return;
     set({
       diaryTitle: title,
       diaryText: text,
-      illustration: buildIllustration(s.memoryText || title, emotionsForDiary, hints),
+      illustration: picture ?? buildIllustration(s.memoryText || title, emotionsForDiary, hints, s.figures),
+      pictureAi: Boolean(picture),
       createdAt: new Date().toISOString(),
       generationMode: mode,
     });
     go("result");
+  };
+
+  // 생성형 그림 (Cloudflare). 실패하거나 20초가 넘으면 null → 템플릿 그림
+  const makePicture = async (hints: SceneHints, description?: string) => {
+    try {
+      const res = await fetch("/api/picture", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hints, me: s.figures.me, mate: s.figures.mate, who: s.figures.who, emotions: emotionsForDiary.slice(0, 2), description, style: s.figures.style }),
+        signal: AbortSignal.timeout(20_000),
+      });
+      const j = await res.json().catch(() => null);
+      return res.ok && typeof j?.image === "string" ? (j.image as string) : null;
+    } catch {
+      return null;
+    }
   };
 
   const generateDemo = (mode: GenerationMode) => {
@@ -124,9 +163,13 @@ export default function Experience() {
   };
 
   const generate = async () => {
+    genRef.current++;
     go("generating");
     setError("");
-    if (!s.memoryText.trim()) return setTimeout(() => generateDemo("demo"), 1200);
+    if (!s.memoryText.trim()) {
+      const id = genRef.current;
+      return setTimeout(() => genRef.current === id && generateDemo("demo"), 1200);
+    }
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
@@ -134,12 +177,13 @@ export default function Experience() {
       const res = await fetch("/api/diary", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ memory: s.memoryText, emotions: emotionsForDiary }),
+        body: JSON.stringify({ memory: s.memoryText, emotions: emotionsForDiary, details: s.figures.note.trim() || undefined }),
         signal: ctrl.signal,
       });
       const j = await res.json().catch(() => null);
       if (!res.ok || !j?.title) throw new Error(j?.error ?? "그림 일기를 만들지 못했어요.");
-      finish(j.title, j.text, j.hints, j.mode === "ai" ? "ai" : "demo");
+      clearTimeout(timer);
+      await finish(j.title, j.text, j.hints, j.mode === "ai" ? "ai" : "demo", j.picture);
     } catch (e) {
       if (ctrl.signal.aborted && abortRef.current !== ctrl) return; // 사용자가 취소함
       setError(ctrl.signal.aborted ? "시간이 너무 오래 걸리고 있어요." : (e as Error).message);
@@ -150,23 +194,37 @@ export default function Experience() {
   };
 
   const cancelGenerate = () => {
+    genRef.current++;
     const c = abortRef.current;
     abortRef.current = null;
     c?.abort();
     go("emotion");
   };
 
+  // ── 그림 속 인물: 기억에 사람이 나올 때만 묻는다 ──
+  const toFigures = () => {
+    // 처음 오면 글에 나온 관계 말(엄마, 할아버지…)로 함께한 사람을 미리 고른다
+    // 직접 적기에서 고른 사람이 있으면 그것을 먼저 쓴다
+    const picked = s.memoryExplorationAnswers.who;
+    const who = picked ? (picked === "혼자" ? "없음" : picked) : (guessMate(s.memoryText)?.word ?? (detectScene(s.memoryText).people === 1 ? "없음" : ""));
+    if (!s.figures.who) set({ figures: { ...s.figures, who, mate: figureFor(who) } });
+    go("figures");
+  };
+  const pickWho = (who: string) => set({ figures: { ...s.figures, who, mate: figureFor(who) } });
+  const setFigure = (who: "me" | "mate", f: Partial<Figure>) => set({ figures: { ...s.figures, [who]: { ...s.figures[who], ...f } } });
+
   // ── 기억 탐색 ──
   const answers = s.memoryExplorationAnswers;
   const currentStep = s.exploreHistory[s.exploreHistory.length - 1];
 
-  const answer = (step: StepId, value: string | undefined) => {
+  const answer = (step: StepId, value: string | undefined, extra?: Answers) => {
     if (!cat) return;
-    const nextAnswers: Answers = { ...answers, [step]: value };
+    const nextAnswers: Answers = { ...answers, ...extra, [step]: value };
     // 첫 답이 바뀌면 그에 딸린 장면·직접 적기 답은 무효
     if (step === "start" && answers.start !== value) {
       delete nextAnswers.scene;
       delete nextAnswers.free;
+      delete nextAnswers.who;
     }
     if (value === undefined) delete nextAnswers[step];
     const n = nextStep(cat, step, nextAnswers);
@@ -194,11 +252,14 @@ export default function Experience() {
   };
 
   const useSummary = () => {
-    const feeling = answers.feeling && answers.feeling !== UNSURE ? feelingToEmotion[answers.feeling] : null;
+    // 직접 적은 느낌은 '기타'로 미리 채운다
+    const f = answers.feeling;
+    const feeling = f ? ((EMOTIONS as readonly string[]).includes(f) ? f : "기타") : null;
     set({
       memoryText: s.confirmedMemorySummary ?? "",
       suggestedEmotion: feeling,
       selectedEmotions: feeling && s.selectedEmotions.length === 0 ? [feeling] : s.selectedEmotions,
+      ...(feeling === "기타" && !s.customEmotion && { customEmotion: f!.slice(0, 10) }),
     });
     go("write");
   };
@@ -261,8 +322,8 @@ export default function Experience() {
             <p className="text-xs tracking-[0.42em] text-gold-light">MEMORY · EMOTION · SCENT</p>
             <h1 className="display mt-7 text-[clamp(3rem,7vw,5.6rem)] leading-none font-medium tracking-[-0.03em]">마음의 조각</h1>
             <span className="mt-8 h-px w-12 bg-gold-light/70" aria-hidden />
-            <p className="display mt-8 text-[clamp(1.3rem,2.4vw,1.75rem)] leading-snug font-medium text-paper/85">당신에게 남아 있는 순간은 무엇인가요?</p>
-            <p className="mt-3 max-w-lg text-base leading-relaxed text-paper/50">기억 하나와 그때의 감정으로 그림 일기를 만들고, 나만의 향과 키링으로 간직해요.</p>
+            <p className="display mt-8 text-[clamp(1.3rem,2.4vw,1.75rem)] leading-snug font-medium text-paper/85">오래 남아 있는 순간이 있나요?</p>
+            <p className="mt-3 max-w-lg text-base leading-relaxed text-paper/50">기억 하나와 그때의 감정으로 그림 일기를 만들고, 향과 키링으로 가져가요.</p>
             <form
               className="mt-12 flex w-full max-w-lg flex-col gap-4 sm:flex-row sm:items-end"
               onSubmit={(e) => {
@@ -287,7 +348,7 @@ export default function Experience() {
               ))}
             </ol>
             <div className="mt-8 w-full max-w-lg [&_summary]:text-paper/45">
-              <Privacy ai={aiEnabled} />
+              <Privacy ai={aiEnabled} picture={pictureEnabled} />
             </div>
           </section>
         )}
@@ -297,12 +358,13 @@ export default function Experience() {
             left={
               <>
                 <h1 className="display text-[clamp(2rem,4.4vw,3.2rem)]">
-                  {s.mode === "today" ? "지금, 이 순간을 적어 볼까요?" : "지금도 문득 떠오르는 순간이 있나요?"}
+                  {s.mode === "today" ? "지금 이 순간을 적어 주세요." : "기억에 남은 순간을 적어 주세요."}
                 </h1>
                 <p className="mt-5 text-xl leading-relaxed text-mute">
-                  {s.confirmedMemorySummary ? "탐색에서 찾은 단서예요. 마음에 남아 있는 부분만 남기고 자유롭게 고쳐 써 주세요." : "행복했던 순간도, 아쉬웠던 순간도 괜찮아요. 작은 장면 하나만 떠올려도 충분해요."}
+                  {s.confirmedMemorySummary ? "고른 답으로 만든 문장이에요. 실제 기억에 맞게 고쳐 주세요." : "좋았던 일도, 아쉬웠던 일도 됩니다. 장면 하나면 충분해요."}
                 </p>
-                <p className="mt-6 text-base text-mute">이름, 연락처처럼 나를 알아볼 수 있는 정보는 적지 않아도 돼요.</p>
+                <Note>장소, 날씨, 함께한 사람, 그때의 감정을 구체적으로 적을수록 그림도 더 구체적으로 나와요.</Note>
+                <p className="mt-4 text-base text-mute">이름이나 연락처는 적지 마세요.</p>
               </>
             }
             right={
@@ -329,7 +391,7 @@ export default function Experience() {
                 </button>
                 {s.mode === "memory" && (
                   <button type="button" className="btn-soft w-full" onClick={() => go("cats")}>
-                    잘 기억나지 않아요. 함께 떠올려 볼까요?
+                    떠오르는 기억이 없어요
                   </button>
                 )}
                 {s.mode === "today" && (
@@ -345,9 +407,9 @@ export default function Experience() {
         {screen === "cats" && (
           <section>
             <BackButton onClick={() => go("write")} />
-            <h1 className="mt-4 display text-[clamp(2rem,4.4vw,3.2rem)]">괜찮아요. 천천히 떠올려 봐요.</h1>
-            <p className="mt-4 max-w-3xl text-xl leading-relaxed text-mute">특별한 사건이 아니어도 괜찮아요. 평범한 하루의 작은 순간도 나에게는 의미 있는 기억일 수 있어요.</p>
-            <Note>아래에서 마음이 가는 것만 골라 보세요. 정답은 없고, 모든 질문에 답할 필요도 없어요.</Note>
+            <h1 className="mt-4 display text-[clamp(2rem,4.4vw,3.2rem)]">질문을 따라 기억을 찾아요.</h1>
+            <p className="mt-4 max-w-3xl text-xl leading-relaxed text-mute">특별한 일이 아니어도 됩니다. 평범한 하루의 한 장면도 좋아요.</p>
+            <Note>주제를 하나 고르세요. 모든 질문에 답하지 않아도 돼요.</Note>
             <ul className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {categories.map((c, i) => (
                 <li key={c.id}>
@@ -370,8 +432,8 @@ export default function Experience() {
               <>
                 <BackButton onClick={() => go("cats")} />
                 <p className="mt-4 text-lg text-sage-deep">{cat.title}</p>
-                <h1 className="mt-3 display text-[clamp(1.8rem,4vw,2.8rem)]">마음이 가는 질문 하나를 골라 보세요.</h1>
-                <Note>답하기 어려우면 다른 주제를 골라도 괜찮아요.</Note>
+                <h1 className="mt-3 display text-[clamp(1.8rem,4vw,2.8rem)]">질문을 하나 고르세요.</h1>
+                <Note>답하기 어려우면 다른 주제를 고르세요.</Note>
               </>
             }
             right={
@@ -408,7 +470,6 @@ export default function Experience() {
                 <h1 className="mt-3 display text-[clamp(1.8rem,4vw,2.8rem)]">
                   {currentStep === "start" ? s.memoryExplorationQuestion : stepQuestion[currentStep]}
                 </h1>
-                <Note>답하지 않아도 괜찮아요. 넘기고 다음으로 가도 돼요.</Note>
               </>
             }
             right={<StepOptions cat={cat} step={currentStep} answers={answers} onAnswer={answer} />}
@@ -420,14 +481,14 @@ export default function Experience() {
             left={
               <>
                 <BackButton onClick={() => go("step")} />
-                <h1 className="mt-4 display text-[clamp(2rem,4.4vw,3.2rem)]">이런 장면이 떠오르나요?</h1>
-                <p className="mt-4 text-xl leading-relaxed text-mute">고른 답을 모아 본 단서예요. 정답이 아니니, 마음에 남아 있는 부분만 남기고 자유롭게 고쳐 주세요.</p>
+                <h1 className="mt-4 display text-[clamp(2rem,4.4vw,3.2rem)]">이 기억이 맞나요?</h1>
+                <p className="mt-4 text-xl leading-relaxed text-mute">고른 답으로 만든 문장이에요. 실제와 다른 부분은 고쳐 주세요.</p>
                 <ul className="mt-6 flex flex-wrap gap-2">
                   {s.exploreHistory.map((st) => {
-                    const v = st === "start" ? answers.start : answers[st];
+                    const v = st === "start" ? answers.start : st === "free" && answers.who ? `${answers.free} · ${answers.who}` : answers[st];
                     return (
                       <li key={st}>
-                        <button type="button" onClick={() => editStep(st)} className="min-h-12 rounded-full border-2 border-line bg-white/70 px-4 text-base active:bg-cream">
+                        <button type="button" onClick={() => editStep(st)} className="min-h-12 rounded-[2px] border border-line bg-paper px-4 text-base active:bg-cream">
                           {v ?? "건너뜀"} <span className="text-mute">· 바꾸기</span>
                         </button>
                       </li>
@@ -439,11 +500,11 @@ export default function Experience() {
             right={
               <div className="flex flex-col gap-3">
                 <label htmlFor="clue" className="text-lg font-medium">
-                  혹시 이런 장면에 가까울까요?
+                  떠오른 기억
                 </label>
                 <textarea id="clue" rows={5} value={s.confirmedMemorySummary ?? ""} onChange={(e) => set({ confirmedMemorySummary: e.target.value })} className="field resize-none" />
                 <button type="button" className="btn-main w-full" disabled={!s.confirmedMemorySummary?.trim()} onClick={useSummary}>
-                  이 장면을 바탕으로 기억 적기
+                  이 문장으로 기억 적기
                 </button>
                 <button type="button" className="btn-soft w-full" onClick={() => go("cats")}>
                   다른 질문으로 탐색하기
@@ -460,8 +521,8 @@ export default function Experience() {
           <Split
             left={
               <>
-                <h1 className="display text-[clamp(2rem,4.4vw,3.2rem)]">떠오르지 않아도 괜찮아요.</h1>
-                <p className="mt-5 text-xl leading-relaxed text-mute">기억은 애쓴다고 바로 나오지 않을 때가 많아요. 지금의 마음으로 그림 일기를 만들 수도 있고, 처음부터 천천히 다시 생각해 볼 수도 있어요.</p>
+                <h1 className="display text-[clamp(2rem,4.4vw,3.2rem)]">다른 방법으로도 할 수 있어요.</h1>
+                <p className="mt-5 text-xl leading-relaxed text-mute">지난 기억 대신 지금의 마음으로 그림 일기를 만들거나, 처음부터 다시 적을 수 있어요.</p>
               </>
             }
             right={
@@ -474,7 +535,7 @@ export default function Experience() {
                     go("today");
                   }}
                 >
-                  다른 방식으로 참여하기
+                  지금의 마음으로 만들기
                 </button>
                 <button
                   type="button"
@@ -484,7 +545,7 @@ export default function Experience() {
                     go("write");
                   }}
                 >
-                  처음부터 다시 생각해 보기
+                  처음부터 다시 적기
                 </button>
               </div>
             }
@@ -496,8 +557,8 @@ export default function Experience() {
             left={
               <>
                 <BackButton onClick={() => go("none")} />
-                <h1 className="mt-4 display text-[clamp(2rem,4.4vw,3.2rem)]">지난 기억 대신, 오늘의 마음으로.</h1>
-                <p className="mt-5 text-xl leading-relaxed text-mute">꼭 과거의 일이 아니어도 괜찮아요. 아래 중 하나를 골라 짧게 적어 보거나, 적지 않고 감정만 골라도 그림 일기를 만들 수 있어요.</p>
+                <h1 className="mt-4 display text-[clamp(2rem,4.4vw,3.2rem)]">오늘의 마음으로 만들어요.</h1>
+                <p className="mt-5 text-xl leading-relaxed text-mute">아래 주제 중 하나로 짧게 적거나, 감정만 골라도 돼요.</p>
               </>
             }
             right={
@@ -535,10 +596,10 @@ export default function Experience() {
           <section>
             <BackButton onClick={() => go(s.mode === "today" && !s.memoryText ? "today" : "write")} />
             <h1 className="mt-4 display text-[clamp(2rem,4.4vw,3.2rem)]">
-              {s.mode === "today" ? "지금의 나는 어떤 감정에 가까운가요?" : "그 순간의 나는 어떤 감정에 가까웠나요?"}
+              {s.mode === "today" ? "지금 어떤 감정에 가까운가요?" : "그때 어떤 감정이었나요?"}
             </h1>
-            <p className="mt-4 text-xl text-mute">가장 가까운 감정을 1~2개 골라 주세요. 여러 감정이 섞여 있어도 괜찮아요.</p>
-            {s.suggestedEmotion && <Note>탐색에서 고른 느낌을 미리 표시해 두었어요. 자유롭게 바꿔도 돼요.</Note>}
+            <p className="mt-4 text-xl text-mute">가장 가까운 감정을 1~2개 고르세요.</p>
+            {s.suggestedEmotion && <Note>앞에서 고른 느낌을 미리 표시했어요. 바꿔도 돼요.</Note>}
             <ul className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
               {EMOTIONS.map((e) => {
                 const on = s.selectedEmotions.includes(e);
@@ -546,7 +607,7 @@ export default function Experience() {
                   <li key={e}>
                     <button type="button" aria-pressed={on} onClick={() => toggleEmotion(e)} className="choice justify-between">
                       {e}
-                      <span aria-hidden className={`ml-2 flex size-7 shrink-0 items-center justify-center rounded-full border-2 text-sm ${on ? "border-brown bg-brown text-ivory" : "border-line"}`}>
+                      <span aria-hidden className={`ml-2 flex size-7 shrink-0 items-center justify-center rounded-full border-2 text-sm ${on ? "border-paper/70 text-paper" : "border-line"}`}>
                         {on ? s.selectedEmotions.indexOf(e) + 1 : ""}
                       </span>
                     </button>
@@ -559,14 +620,14 @@ export default function Experience() {
                 <label htmlFor="custom" className="text-lg">
                   어떤 감정인가요?
                 </label>
-                <input id="custom" value={s.customEmotion} maxLength={10} onChange={(e) => set({ customEmotion: e.target.value })} placeholder="예: 뭉클함" className="field mt-2" />
+                <input id="custom" value={s.customEmotion} maxLength={10} onChange={(e) => set({ customEmotion: e.target.value })} placeholder="예: 홀가분함" className="field mt-2" />
               </div>
             )}
             <p role="status" className="mt-4 min-h-7 text-apricot-deep">
               {emotionHint}
             </p>
             <div className="mt-4 flex flex-col items-center gap-2 sm:items-end">
-              <button type="button" className="btn-main w-full sm:w-80" disabled={!emotionReady} onClick={() => go("heart")}>
+              <button type="button" className="btn-main w-full sm:w-80" disabled={!emotionReady} onClick={toFigures}>
                 다음
               </button>
               {!emotionReady && <p className="text-mute">감정을 하나 이상 골라 주세요.</p>}
@@ -574,18 +635,77 @@ export default function Experience() {
           </section>
         )}
 
-        {screen === "heart" && (
+        {screen === "figures" && (
           <Split
             left={
               <>
                 <BackButton onClick={() => go("emotion")} />
-                <h1 className="mt-4 display text-[clamp(2rem,4.4vw,3.2rem)]">내 마음의 바탕을 살펴볼까요?</h1>
-                <p className="mt-5 text-xl leading-relaxed text-mute">대인관계, 가족관계, 일과 공부, 나의 감정 네 영역에서 요즘의 나와 닮은 문장을 골라요. 3분쯤 걸리고, 마치면 지금 마음에 어울리는 향 조합을 추천해 드려요.</p>
-                <Note>진단이 아닌 참고용이에요. 고른 문장은 AI로 보내지 않고 그림 일기에도 들어가지 않으며, 코칭존 상담을 위해 상담사에게 전달돼요.</Note>
+                <h1 className="mt-4 display text-[clamp(2rem,4.4vw,3.2rem)]">그림 속 인물을 정해 주세요.</h1>
+                <p className="mt-5 text-xl leading-relaxed text-mute">그림 일기의 사람 모습에 반영돼요. 정하지 않으면 중성적인 뒷모습으로 그려요.</p>
+                <Note>그림을 그리는 데만 쓰고 저장하지 않아요.</Note>
               </>
             }
             right={
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-6">
+                {pictureEnabled && <Segmented label="그림 스타일" options={PICTURE_STYLES} value={s.figures.style} onChange={(style) => set({ figures: { ...s.figures, style } })} cols={2} />}
+                <fieldset className="flex flex-col gap-4">
+                  <legend className="display float-left mb-3 w-full text-xl">나</legend>
+                  <Segmented label="모습" options={GENDERS} value={s.figures.me.gender} onChange={(gender) => setFigure("me", { gender })} cols={3} />
+                  <Segmented label="나이대" options={AGES} value={s.figures.me.age} onChange={(age) => setFigure("me", { age })} cols={3} />
+                </fieldset>
+                <fieldset className="flex flex-col gap-4 border-t border-ink/15 pt-6">
+                  <legend className="display float-left mb-3 w-full text-xl">함께한 사람</legend>
+                  <div role="radiogroup" aria-label="함께한 사람" className="flex flex-wrap gap-2">
+                    {["없음", ...WHO.filter((w) => w !== "혼자")].map((w) => (
+                      <button key={w} type="button" role="radio" aria-checked={s.figures.who === w} onClick={() => pickWho(w)} className={`min-h-12 rounded-[2px] border px-4 text-base ${s.figures.who === w ? "border-ink bg-ink text-paper" : "border-ink/30 bg-paper/60 active:bg-cream"}`}>
+                        {w === "없음" ? "없음 (나 혼자)" : w}
+                      </button>
+                    ))}
+                  </div>
+                  {s.figures.who && s.figures.who !== "없음" && (
+                    <>
+                      <Segmented label={`${s.figures.who}의 모습`} options={GENDERS} value={s.figures.mate.gender} onChange={(gender) => setFigure("mate", { gender })} cols={3} />
+                      <Segmented label={`${s.figures.who}의 나이대`} options={AGES} value={s.figures.mate.age} onChange={(age) => setFigure("mate", { age })} cols={3} />
+                    </>
+                  )}
+                </fieldset>
+                <div className="border-t border-ink/15 pt-6">
+                  <label htmlFor="fnote" className="display block text-xl">
+                    더 자세히 <span className="text-base text-mute">· 선택</span>
+                  </label>
+                  <p className="mt-1 mb-3 text-base text-mute">옷차림, 머리 모양, 날씨, 함께 있던 물건, 그때의 기분처럼 그림에 넣고 싶은 것을 적어 주세요. 구체적일수록 그림도 구체적으로 나와요.</p>
+                  <textarea id="fnote" rows={3} maxLength={200} value={s.figures.note} onChange={(e) => set({ figures: { ...s.figures, note: e.target.value } })} placeholder="예: 엄마는 노란 원피스를 입었고, 바람이 많이 불었어요." className="field resize-none text-lg" />
+                </div>
+                <button type="button" className="btn-main w-full" onClick={() => go("heart")}>
+                  다음
+                </button>
+              </div>
+            }
+          />
+        )}
+
+        {screen === "heart" && (
+          <Split
+            left={
+              <>
+                <BackButton onClick={() => go("figures")} />
+                <p className="mt-6 text-sm tracking-[0.2em] text-gold">약 3분 · {heartPages.length}쪽</p>
+                <h1 className="mt-3 display text-[clamp(2rem,4.4vw,3.2rem)]">요즘의 나를 체크해요.</h1>
+                <p className="mt-5 text-xl leading-relaxed text-mute">네 영역에서 요즘의 나와 닮은 문장을 모두 골라요. 끝나면 지금 마음에 맞는 향 조합을 추천해요.</p>
+                <Note>진단이 아닌 참고용이에요. 고른 문장은 AI로 보내지 않고 그림 일기에도 넣지 않아요. 코칭존 상담사에게만 전달돼요.</Note>
+              </>
+            }
+            right={
+              <div className="flex flex-col">
+                <ol className="mb-8 border-t border-ink/15">
+                  {AREAS.map((a, i) => (
+                    <li key={a} className="flex items-baseline gap-5 border-b border-ink/15 py-5">
+                      <span className="display w-8 text-lg text-gold tabular-nums">0{i + 1}</span>
+                      <span className="flex-1 text-xl">{a}</span>
+                      <span className="text-base text-mute">{areaItems(a).length}문항</span>
+                    </li>
+                  ))}
+                </ol>
                 <button
                   type="button"
                   className="btn-main w-full"
@@ -614,7 +734,7 @@ export default function Experience() {
             <h1 className="mt-2 display text-[clamp(1.8rem,4vw,2.6rem)]">
               {page.area === "나의 감정" ? "나에게 해당하는 모습을 모두 골라 주세요." : `${page.area}에서 요즘의 나와 닮은 문장을 모두 골라 주세요.`}
             </h1>
-            <p className="mt-3 text-lg text-mute">깊이 고민하지 말고 마음이 가는 대로 골라요. 하나도 없으면 그냥 넘어가도 괜찮아요.</p>
+            <p className="mt-3 text-lg text-mute">오래 고민하지 말고 고르세요. 해당하는 게 없으면 넘어가세요.</p>
             <ul className="mt-8 grid gap-3 sm:grid-cols-2">
               {page.items.map((x) => {
                 const k = itemKey(page.area, x);
@@ -688,7 +808,7 @@ export default function Experience() {
 
       {(confirmReset || idle) && (
         <Dialog
-          title={idle ? "아직 체험 중이신가요?" : "처음부터 다시할까요?"}
+          title={idle ? "계속하시나요?" : "처음부터 다시할까요?"}
           body={idle ? "한동안 움직임이 없어요. 다음 참가자를 위해 30초 뒤 처음 화면으로 돌아가고, 적은 내용은 지워져요." : "지금까지 적은 기억과 감정, 만든 그림 일기가 모두 지워져요."}
           confirm={idle ? "처음으로" : "처음부터 다시하기"}
           cancel={idle ? "계속할게요" : "아니요, 계속할게요"}
@@ -738,8 +858,9 @@ function Progress({ total, at }: { total: number; at: number }) {
   );
 }
 
-function StepOptions({ cat, step, answers, onAnswer }: { cat: Category; step: StepId; answers: Answers; onAnswer: (step: StepId, v: string | undefined) => void }) {
+function StepOptions({ cat, step, answers, onAnswer }: { cat: Category; step: StepId; answers: Answers; onAnswer: (step: StepId, v: string | undefined, extra?: Answers) => void }) {
   const [free, setFree] = useState(answers.free ?? "");
+  const [who, setWho] = useState(answers.who);
   if (step === "free") {
     return (
       <div className="flex flex-col gap-3">
@@ -747,17 +868,26 @@ function StepOptions({ cat, step, answers, onAnswer }: { cat: Category; step: St
           떠오르는 장면
         </label>
         <textarea id="free" rows={4} maxLength={200} value={free} onChange={(e) => setFree(e.target.value)} placeholder="예: 비 오는 날 우산을 같이 썼던 일" className="field resize-none" />
-        <button type="button" className="btn-main w-full" disabled={!free.trim()} onClick={() => onAnswer("free", free.trim())}>
+        <div role="group" aria-label="누구와 함께였나요">
+          <p className="mt-2 mb-2 text-base text-mute">누구와 함께였나요? · 선택</p>
+          <div className="flex flex-wrap gap-2">
+            {WHO.map((w) => (
+              <button key={w} type="button" aria-pressed={who === w} onClick={() => setWho(who === w ? undefined : w)} className={`min-h-12 rounded-[2px] border px-4 text-base ${who === w ? "border-ink bg-ink text-paper" : "border-ink/30 bg-paper/60 active:bg-cream"}`}>
+                {w}
+              </button>
+            ))}
+          </div>
+        </div>
+        <button type="button" className="btn-main w-full" disabled={!free.trim()} onClick={() => onAnswer("free", free.trim(), { who })}>
           다음
-        </button>
-        <button type="button" className="btn-text self-center" onClick={() => onAnswer("free", undefined)}>
-          건너뛰기
         </button>
       </div>
     );
   }
   const scenes = cat.start.find((o) => o.label === answers.start)?.scenes ?? [];
-  const opts = step === "start" ? cat.start.map((o) => o.label) : step === "scene" ? [...scenes, UNSURE] : step === "when" ? whenOptions : cat.feelings;
+  const opts = step === "start" ? cat.start.map((o) => o.label) : step === "scene" ? scenes : step === "when" ? whenOptions : cat.feelings;
+  // 시작 질문은 '직접 적어 볼게요' 선택지가 따로 있다. 나머지는 고를 게 없으면 직접 적는다
+  const own = answers[step] && !opts.includes(answers[step]) ? answers[step] : "";
   return (
     <div className="flex flex-col gap-3">
       {opts.map((o) => (
@@ -765,10 +895,38 @@ function StepOptions({ cat, step, answers, onAnswer }: { cat: Category; step: St
           {o}
         </button>
       ))}
-      <button type="button" className="btn-text self-center" onClick={() => onAnswer(step, undefined)}>
-        답하지 않고 넘어가기
-      </button>
+      {step !== "start" && <OwnAnswer step={step} initial={own} onAnswer={onAnswer} />}
     </div>
+  );
+}
+
+const ownPlaceholder: Partial<Record<StepId, string>> = { scene: "예: 바닷가에서 조개를 줍던 장면", when: "예: 작년 여름", feeling: "예: 뭉클함" };
+
+function OwnAnswer({ step, initial, onAnswer }: { step: StepId; initial: string; onAnswer: (step: StepId, v: string) => void }) {
+  const [open, setOpen] = useState(!!initial);
+  const [v, setV] = useState(initial);
+  if (!open)
+    return (
+      <button type="button" className="choice text-mute" onClick={() => setOpen(true)}>
+        직접 적기
+      </button>
+    );
+  return (
+    <form
+      className="flex flex-col gap-3 sm:flex-row"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (v.trim()) onAnswer(step, v.trim());
+      }}
+    >
+      <label htmlFor="own" className="sr-only">
+        직접 적기
+      </label>
+      <input id="own" autoFocus value={v} maxLength={step === "feeling" ? 10 : 60} onChange={(e) => setV(e.target.value)} placeholder={ownPlaceholder[step]} className="field py-4 sm:flex-1" autoComplete="off" enterKeyHint="next" />
+      <button type="submit" className="btn-main sm:w-32" disabled={!v.trim()}>
+        다음
+      </button>
+    </form>
   );
 }
 
@@ -781,7 +939,7 @@ function Generating({ onCancel }: { onCancel: () => void }) {
   return (
     <section className="flex flex-1 flex-col items-center justify-center text-center" aria-busy="true">
       <Pieces spinning />
-      <h1 className="mt-10 display text-[clamp(1.8rem,4vw,2.8rem)]">당신의 기억을 한 장에 담고 있어요.</h1>
+      <h1 className="mt-10 display text-[clamp(1.8rem,4vw,2.8rem)]">그림 일기를 만들고 있어요.</h1>
       <p role="status" className="mt-4 min-h-8 text-xl text-mute">
         {loadingLines[i]}
       </p>
@@ -798,31 +956,42 @@ function Result({ s, emotions, onRedo, onRestart }: { s: State; emotions: string
   const [font, setFont] = useState<DiaryFont>("auto");
   const [align, setAlign] = useState<DiaryAlign>("auto");
   const [bg, setBg] = useState<DiaryBg>("auto");
+  const [ink, setInk] = useState("");
+  const [accent, setAccent] = useState("");
+  // 참가자가 고친 제목·문장. 비우면 만든 문장으로 되돌린다
+  const [titleEdit, setTitleEdit] = useState(s.diaryTitle);
+  const [textEdit, setTextEdit] = useState(s.diaryText);
+  const title = titleEdit.trim() || s.diaryTitle;
+  const text = textEdit.trim() || s.diaryText;
   const [rendered, setRendered] = useState<{ url: string; key: string } | null>(null);
   const [pngError, setPngError] = useState(false);
-  const shortLine = s.diaryText.split("\n")[0];
-  const emotionKey = emotions.join("|");
-  const renderKey = [theme, font, align, bg, s.illustration, s.diaryTitle, shortLine, emotionKey, transparent].join("\u0000");
+  const cardRef = useRef<HTMLDivElement>(null);
+  const renderKey = [theme, font, align, bg, ink, accent, s.illustration, title, text, emotions.join("|"), transparent].join("\u0000");
   // 옵션을 바꾸면 새 이미지가 나올 때까지 이전(곧 해제될) 주소는 쓰지 않는다
   const png = rendered?.key === renderKey ? rendered : null;
 
+  // 카드가 바뀌고 잠시 멈추면(글자 입력 중엔 기다림) 카드를 PNG로 찍는다
   useEffect(() => {
+    const card = cardRef.current?.firstElementChild;
+    if (!(card instanceof HTMLElement)) return;
     let url = "";
     let alive = true;
-    const [, , fill, light] = BGS.find(([id]) => id === bg) ?? BGS[0];
-    renderKeyring({ theme, font, align, bg: fill ? { fill, light } : null, svg: s.illustration, title: s.diaryTitle, line: shortLine, emotions: emotionKey.split("|"), date: new Date(s.createdAt ?? Date.now()), transparent })
-      .then((blob) => {
-        if (!alive) return;
-        url = URL.createObjectURL(blob);
-        setRendered({ url, key: renderKey });
-        setPngError(false);
-      })
-      .catch(() => alive && setPngError(true));
+    const t = setTimeout(() => {
+      cardToPng(card, transparent)
+        .then((blob) => {
+          if (!alive) return;
+          url = URL.createObjectURL(blob);
+          setRendered({ url, key: renderKey });
+          setPngError(false);
+        })
+        .catch(() => alive && setPngError(true));
+    }, 400);
     return () => {
       alive = false;
+      clearTimeout(t);
       if (url) URL.revokeObjectURL(url);
     };
-  }, [theme, font, align, bg, s.illustration, s.diaryTitle, shortLine, emotionKey, transparent, s.createdAt, renderKey]);
+  }, [renderKey, transparent]);
 
   const download = () => {
     if (!png) return;
@@ -832,48 +1001,55 @@ function Result({ s, emotions, onRedo, onRestart }: { s: State; emotions: string
     a.click();
   };
 
-  const label = s.generationMode === "ai" ? "문장: AI 생성 · 그림: 일러스트 템플릿" : s.generationMode === "demo-fallback" ? "데모 모드 (AI 생성 실패로 대체) · AI 미사용" : "데모 모드 · AI 미사용";
+  const sentence = s.generationMode === "ai" ? "문장: AI 생성" : s.generationMode === "demo-fallback" ? "문장: 데모 (AI 생성 실패로 대체)" : "문장: 데모";
+  const label = `${sentence} · 그림: ${s.pictureAi ? "AI 생성" : "일러스트 템플릿"}`;
 
   return (
+    // 왼쪽 그림 일기는 화면에 붙어 있고, 오른쪽에서 꾸미면 바로 바뀐다
     <section className="grid gap-10 py-4 lg:grid-cols-[1.1fr_1fr] landscape:md:grid-cols-[1.1fr_1fr]">
-      <div>
-        <div className="mx-auto mb-6 flex max-w-md flex-col gap-4">
-          <Segmented label="디자인 — 키링도 같은 디자인으로 만들어져요" options={THEMES} value={theme} onChange={setTheme} cols={3} />
-          <Segmented label="글씨체" options={FONTS} value={font} onChange={setFont} cols={4} />
-          <Segmented label="정렬" options={ALIGNS} value={align} onChange={setAlign} cols={4} />
-          <div role="radiogroup" aria-label="배경색">
-            <p className="mb-2 text-base text-mute">배경색</p>
-            <div className="flex flex-wrap gap-2.5">
-              {BGS.map(([id, name, fill]) => (
-                <button key={id} type="button" role="radio" aria-checked={bg === id} aria-label={name} title={name} onClick={() => setBg(id)} className={`size-12 rounded-full border border-ink/20 ring-offset-2 ring-offset-ivory ${bg === id ? "ring-2 ring-ink" : ""}`} style={{ background: fill || "conic-gradient(#e8b9a0, #c5d8de, #b4c1a5, #e8c3c0, #e8b9a0)" }}>
-                  {id === "auto" && <span className="text-xs text-ink">기본</span>}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-        <DiaryCard theme={theme} font={font} align={align} bg={bg} title={s.diaryTitle} text={s.diaryText} illustration={s.illustration} createdAt={s.createdAt} emotions={emotions} />
+      <div ref={cardRef} className="lg:sticky lg:top-4 lg:self-start landscape:md:sticky landscape:md:top-4 landscape:md:self-start">
+        <DiaryCard theme={theme} font={font} align={align} bg={bg} ink={ink} accent={accent} title={title} text={text} illustration={s.illustration} createdAt={s.createdAt} emotions={emotions} />
         <p className="mt-4 text-center text-sm text-mute">{label}</p>
       </div>
 
       <div className="flex flex-col gap-4">
-        <h2 className="display text-2xl">키링 이미지</h2>
-        <div className="mx-auto w-full max-w-xs rounded-3xl bg-[repeating-conic-gradient(#efe6d6_0_25%,#faf6ee_0_50%)] bg-[length:24px_24px] p-3">
+        <h2 className="display text-2xl">키링 미리보기</h2>
+        <KeyringMockup>
           {png ? (
             // eslint-disable-next-line @next/next/no-img-element -- 생성한 PNG 미리보기 (길게 눌러 저장 가능)
-            <img src={png.url} alt="키링용 정사각형 이미지 미리보기" className="w-full" />
+            <img src={png.url} alt="키링 이미지 미리보기 (실제 아크릴 키링에 끼운 모습)" className="w-full" />
           ) : (
             <div className="flex aspect-square items-center justify-center text-mute">{pngError ? "이미지를 만들지 못했어요." : "만드는 중…"}</div>
           )}
+        </KeyringMockup>
+
+        <h2 className="mt-6 border-t border-ink/15 pt-6 display text-2xl">꾸미기</h2>
+        <p className="-mt-2 text-base text-mute">그림 일기와 키링에 같이 적용돼요.</p>
+        <Segmented label="디자인" options={THEMES} value={theme} onChange={setTheme} cols={3} />
+        <Segmented label="글씨체" options={FONTS} value={font} onChange={setFont} cols={4} />
+        <Segmented label="정렬" options={ALIGNS} value={align} onChange={setAlign} cols={4} />
+        <Swatches label="배경색" options={BGS.map(([id, name, fill]) => [id, name, fill])} value={bg} onChange={setBg} />
+        <Swatches label="글자색" options={INKS.map(([c, name]) => [c, name, c])} value={ink} onChange={setInk} />
+        <Swatches label="포인트색" options={ACCENTS.map(([c, name]) => [c, name, c])} value={accent} onChange={setAccent} />
+        <div>
+          <label htmlFor="etitle" className="mb-2 block text-base text-mute">
+            제목
+          </label>
+          <input id="etitle" value={titleEdit} maxLength={20} onChange={(e) => setTitleEdit(e.target.value)} className="field py-3" autoComplete="off" />
+          <label htmlFor="etext" className="mt-4 mb-2 block text-base text-mute">
+            문장
+          </label>
+          <textarea id="etext" rows={3} value={textEdit} maxLength={160} onChange={(e) => setTextEdit(e.target.value)} className="field resize-none text-lg" />
         </div>
-        <label className="flex min-h-12 items-center gap-3 self-center text-lg">
-          <input type="checkbox" checked={transparent} onChange={(e) => setTransparent(e.target.checked)} className="size-6 accent-[#5b4636]" />
-          바깥 배경 투명하게
+
+        <label className="mt-4 flex min-h-12 items-center gap-3 self-center text-lg">
+          <input type="checkbox" checked={transparent} onChange={(e) => setTransparent(e.target.checked)} className="size-6 accent-[#0d0c0b]" />
+          키링 바깥 배경 투명하게
         </label>
         <button type="button" className="btn-main w-full" disabled={!png} onClick={download}>
           키링용 이미지 저장하기
         </button>
-        <p className="text-center text-sm text-mute">1500×1500 PNG · 저장이 안 되면 위 이미지를 길게 눌러 저장하세요.</p>
+        <p className="text-center text-sm text-mute">그림 일기와 같은 모양 · 가로 1500px PNG · 저장이 안 되면 위 이미지를 길게 눌러 저장하세요.</p>
         <button type="button" className="btn-soft w-full" onClick={onRedo}>
           그림 일기 다시 만들기
         </button>
@@ -923,12 +1099,12 @@ function ScentResult({ name, checks, code, onSaved, onBack, onRetry, onNext }: {
           <BackButton onClick={onBack} />
           {scent ? (
             <>
-              <h1 className="mt-4 display text-[clamp(2rem,4.4vw,3.2rem)]">지금 마음에 어울리는 향이에요.</h1>
+              <h1 className="mt-4 display text-[clamp(2rem,4.4vw,3.2rem)]">추천 향 조합</h1>
               <ol className="mt-8 flex flex-col gap-3">
                 {(
                   [
                     ["탑", "처음 스치는 향", scent.top],
-                    ["미들", "마음을 감싸는 향", scent.middle],
+                    ["미들", "중심이 되는 향", scent.middle],
                     ["베이스", "오래 남는 향", scent.base],
                   ] as const
                 ).map(([n, d, note]) => (
@@ -944,12 +1120,12 @@ function ScentResult({ name, checks, code, onSaved, onBack, onRetry, onNext }: {
                   </li>
                 ))}
               </ol>
-              <Note>향 조합은 체험을 위한 참고예요. 시향해 보고 마음에 드는 쪽으로 바꿔도 좋아요.</Note>
+              <Note>추천은 참고용이에요. 시향해 보고 바꿔도 돼요.</Note>
             </>
           ) : (
             <>
               <h1 className="mt-4 display text-[clamp(2rem,4.4vw,3.2rem)]">고른 문장이 없어서 향을 추천하지 못했어요.</h1>
-              <p className="mt-5 text-xl leading-relaxed text-mute">조금이라도 닮았다고 느끼는 문장을 하나 이상 골라 주세요.</p>
+              <p className="mt-5 text-xl leading-relaxed text-mute">닮은 문장을 하나 이상 골라 주세요.</p>
             </>
           )}
         </>
@@ -988,6 +1164,52 @@ function ScentResult({ name, checks, code, onSaved, onBack, onRetry, onNext }: {
         </div>
       }
     />
+  );
+}
+
+// 실물 미리보기: 금속 고리와 체인에 매달린 투명 아크릴. 저장되는 PNG에는 들어가지 않는다
+function KeyringMockup({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mx-auto flex w-full max-w-[19rem] flex-col items-center py-2">
+      <svg viewBox="0 0 120 150" className="w-24 drop-shadow-[0_3px_3px_rgba(13,12,11,.25)]" aria-hidden>
+        <defs>
+          <linearGradient id="metal" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0" stopColor="#f4efe6" />
+            <stop offset=".45" stopColor="#a9a39a" />
+            <stop offset=".7" stopColor="#e9e4dc" />
+            <stop offset="1" stopColor="#77716a" />
+          </linearGradient>
+        </defs>
+        <circle cx="60" cy="38" r="30" fill="none" stroke="url(#metal)" strokeWidth="6" />
+        {[0, 1, 2, 3].map((i) => (
+          <ellipse key={i} cx="60" cy={78 + i * 16} rx="5" ry="9" fill="none" stroke="url(#metal)" strokeWidth="3.5" transform={i % 2 ? `rotate(90 60 ${78 + i * 16})` : undefined} />
+        ))}
+        <circle cx="60" cy="144" r="6" fill="none" stroke="url(#metal)" strokeWidth="3.5" />
+      </svg>
+      <div className="relative -mt-1 w-full rotate-[-2deg] rounded-[1.6rem] border border-white/70 bg-white/35 p-2.5 pt-8 shadow-[0_22px_30px_-18px_rgba(13,12,11,.55),inset_0_0_0_1px_rgba(255,255,255,.5)] backdrop-blur-[1px]">
+        <span className="absolute top-2.5 left-1/2 z-10 size-4 -translate-x-1/2 rounded-full border border-ink/20 bg-ivory shadow-[inset_0_1px_2px_rgba(13,12,11,.35)]" aria-hidden />
+        <div className="overflow-hidden rounded-[1.2rem]">{children}</div>
+        <span className="pointer-events-none absolute inset-0 rounded-[1.6rem] bg-[linear-gradient(125deg,rgba(255,255,255,.55)_0%,rgba(255,255,255,0)_28%,rgba(255,255,255,0)_70%,rgba(255,255,255,.25)_100%)]" aria-hidden />
+      </div>
+    </div>
+  );
+}
+
+// 색 견본 고르기. fill이 ""이면 "기본"
+function Swatches<T extends string>({ label, options, value, onChange }: { label: string; options: [T, string, string][]; value: T; onChange: (v: T) => void }) {
+  return (
+    <div role="radiogroup" aria-label={label}>
+      <p className="mb-2 text-base text-mute">
+        {label} <span className="text-sm">· {options.find(([id]) => id === value)?.[1]}</span>
+      </p>
+      <div className="flex flex-wrap gap-2.5">
+        {options.map(([id, name, fill]) => (
+          <button key={id || "auto"} type="button" role="radio" aria-checked={value === id} aria-label={name} title={name} onClick={() => onChange(id)} className={`size-11 rounded-full border border-ink/20 ring-offset-2 ring-offset-ivory ${value === id ? "ring-2 ring-ink" : ""}`} style={{ background: fill || "conic-gradient(#e8b9a0, #c5d8de, #b4c1a5, #e8c3c0, #e8b9a0)" }}>
+            {!fill && <span className="text-xs text-ink">기본</span>}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -1051,7 +1273,7 @@ function Pieces({ spinning = false }: { spinning?: boolean }) {
   );
 }
 
-function Privacy({ ai }: { ai: boolean }) {
+function Privacy({ ai, picture }: { ai: boolean; picture: boolean }) {
   return (
     <details className="text-center text-base leading-relaxed text-mute">
       <summary className="btn-text cursor-pointer">개인정보와 이용 안내</summary>
@@ -1060,6 +1282,7 @@ function Privacy({ ai }: { ai: boolean }) {
         <p>· 적은 이름과 핵심감정 체크 결과는 코칭존 상담을 위해 저장되고, 정해진 기간 뒤 지워져요.</p>
         <p>· 마지막에 &lsquo;처음부터 다시하기&rsquo;를 누르면 모든 내용이 지워져요.</p>
         {ai && <p>· 그림 일기 문장을 만들 때 적은 기억과 감정이 AI 서비스(Anthropic)로 전송돼요. 이 앱은 따로 보관하지 않으며, 전송된 내용은 제공사의 정책에 따라 처리돼요.</p>}
+        {picture && <p>· 그림을 만들 때 장면·날씨·인물 모습(성별·나이대)을 영어 설명으로 바꿔 이미지 생성 서비스(Cloudflare)로 보내요. 이 앱은 따로 보관하지 않아요.</p>}
         <p>· 이 체험은 심리 검사나 진단이 아니에요.</p>
       </div>
     </details>
