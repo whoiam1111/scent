@@ -5,7 +5,6 @@ import { categories, feelingToEmotion, nextStep, summarize, UNSURE, whenOptions,
 import { demoDiary, detectScene, EMOTIONS, type SceneHints } from "@/lib/diary";
 import { buildIllustration } from "@/lib/illustration";
 import { renderKeyring, type Theme } from "@/lib/keyring";
-import { Bottle } from "@/components/Scenery";
 import DiaryCard, { ALIGNS, BGS, FONTS, THEMES, type DiaryAlign, type DiaryBg, type DiaryFont } from "@/components/DiaryCard";
 import { heartPages, itemKey, scoreHeart } from "@/lib/heart";
 import { NOTES, SCENTS } from "@/lib/scent";
@@ -258,40 +257,37 @@ export default function Experience() {
       <div className={`mx-auto flex w-full max-w-6xl flex-1 flex-col px-5 sm:px-10 ${screen === "start" ? "" : "pb-10"}`}>
       <main key={screen + (currentStep ?? "")} className="fade-in flex flex-1 flex-col">
         {screen === "start" && (
-          <section className="relative left-1/2 flex w-screen flex-1 -translate-x-1/2 flex-col">
-            <div className="bg-ink px-5 pt-[clamp(1.5rem,5vh,4.5rem)] pb-[clamp(7rem,17vh,11rem)] text-center text-paper">
-              <h1 className="display text-[clamp(2.4rem,5.6vw,4.6rem)] text-gold-light">마음의 조각</h1>
-              <p className="display mt-3 text-[clamp(1.9rem,4.4vw,3.6rem)] leading-[1.25]">
-                당신에게 남아 있는
-                <br />
-                순간은 무엇인가요?
-              </p>
-            </div>
-            <div className="flex flex-1 flex-col items-center bg-ivory px-5 pb-10">
-              <div className="-mt-[clamp(6.5rem,15vh,10rem)]">
-                <Bottle />
-              </div>
-              <p className="mt-5 max-w-xl text-center text-lg leading-relaxed text-mute">기억 하나와 그때의 감정으로 그림 일기를 만들고, 나만의 향과 키링으로 간직해요.</p>
-              <form
-                className="mt-6 flex w-full max-w-xl flex-col gap-3"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (s.participantName.trim()) go("write");
-                }}
-              >
-                <label htmlFor="pname" className="text-center text-lg">
-                  이름이나 닉네임을 적고 시작해요
-                </label>
-                <div className="flex flex-col gap-3 sm:flex-row">
-                  <input id="pname" value={s.participantName} maxLength={20} onChange={(e) => set({ participantName: e.target.value })} placeholder="예: 마음이" className="field px-6 py-4 sm:flex-1" autoComplete="off" enterKeyHint="go" />
-                  <button type="submit" className="btn-main text-xl sm:w-48" disabled={!s.participantName.trim()}>
-                    시작하기
-                  </button>
-                </div>
-              </form>
-              <div className="mt-4 w-full max-w-xl">
-                <Privacy ai={aiEnabled} />
-              </div>
+          <section className="relative left-1/2 flex w-screen flex-1 -translate-x-1/2 flex-col items-center justify-center bg-ink px-5 pt-6 pb-12 text-center text-paper">
+            <p className="text-xs tracking-[0.42em] text-gold-light">MEMORY · EMOTION · SCENT</p>
+            <h1 className="display mt-7 text-[clamp(3rem,7vw,5.6rem)] leading-none font-medium tracking-[-0.03em]">마음의 조각</h1>
+            <span className="mt-8 h-px w-12 bg-gold-light/70" aria-hidden />
+            <p className="display mt-8 text-[clamp(1.3rem,2.4vw,1.75rem)] leading-snug font-medium text-paper/85">당신에게 남아 있는 순간은 무엇인가요?</p>
+            <p className="mt-3 max-w-lg text-base leading-relaxed text-paper/50">기억 하나와 그때의 감정으로 그림 일기를 만들고, 나만의 향과 키링으로 간직해요.</p>
+            <form
+              className="mt-12 flex w-full max-w-lg flex-col gap-4 sm:flex-row sm:items-end"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (s.participantName.trim()) go("write");
+              }}
+            >
+              <label className="flex flex-1 flex-col text-left">
+                <span className="text-xs tracking-[0.2em] text-paper/50">이름 또는 닉네임</span>
+                <input id="pname" value={s.participantName} maxLength={20} onChange={(e) => set({ participantName: e.target.value })} placeholder="예: 마음이" className="mt-2 border-b border-paper/30 bg-transparent py-3 text-xl text-paper placeholder:text-paper/25 focus:border-gold-light focus:outline-none" autoComplete="off" enterKeyHint="go" />
+              </label>
+              <button type="submit" className="btn-main border border-gold-light bg-gold-light text-ink active:bg-gold disabled:border-paper/20 disabled:bg-transparent disabled:text-paper/35 disabled:opacity-100 sm:w-44" disabled={!s.participantName.trim()}>
+                시작하기 →
+              </button>
+            </form>
+            <ol className="mt-14 flex gap-6 text-sm tracking-[0.12em] text-paper/45 sm:gap-10">
+              {["기억", "감정", "향과 키링"].map((t, i) => (
+                <li key={t}>
+                  <span className="mr-2 text-gold-light">0{i + 1}</span>
+                  {t}
+                </li>
+              ))}
+            </ol>
+            <div className="mt-8 w-full max-w-lg [&_summary]:text-paper/45">
+              <Privacy ai={aiEnabled} />
             </div>
           </section>
         )}
