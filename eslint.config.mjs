@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // 외부에서 설치한 Claude 스킬 (우리 코드가 아님)
+    ".claude/**",
   ]),
 ]);
 

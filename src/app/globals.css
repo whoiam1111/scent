@@ -1,26 +1,70 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-ivory: #faf6ee;
+  --color-cream: #f3ead9;
+  --color-apricot: #f2c4a7;
+  --color-apricot-deep: #d98b62;
+  --color-sage: #a9b79a;
+  --color-sage-deep: #6f8262;
+  --color-brown: #5b4636;
+  --color-mute: #8c7a68;
+  --color-line: #e4d6bf;
+  --font-serif: var(--font-gowun), "Nanum Myeongjo", serif;
+  --font-sans: var(--font-noto), "Apple SD Gothic Neo", system-ui, sans-serif;
+  --font-pen: var(--font-pen-src), "Nanum Pen", cursive;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-ivory);
+  color: var(--color-brown);
+  font-family: var(--font-sans);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  -webkit-tap-highlight-color: transparent;
+  /* 종이 결 */
+  background-image: radial-gradient(rgba(91, 70, 54, 0.05) 1px, transparent 1px);
+  background-size: 6px 6px;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-apricot-deep);
+  outline-offset: 3px;
+}
+
+@layer components {
+  .btn-main,
+  .btn-soft {
+    @apply inline-flex min-h-16 items-center justify-center rounded-2xl px-7 text-lg font-medium transition-colors duration-150 select-none disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .btn-main {
+    @apply bg-brown text-ivory active:bg-[#3f2f23];
+  }
+  .btn-soft {
+    @apply border-2 border-line bg-white/70 text-brown active:bg-cream;
+  }
+  .btn-text {
+    @apply inline-flex min-h-12 items-center px-2 text-base text-mute underline underline-offset-4 active:text-brown;
+  }
+  .choice {
+    @apply flex min-h-18 w-full items-center rounded-2xl border-2 border-line bg-white/70 px-6 py-4 text-left text-lg leading-snug transition-colors duration-150 active:bg-cream;
+  }
+  .choice[aria-pressed="true"] {
+    @apply border-brown bg-cream font-medium;
+  }
+  .field {
+    @apply w-full rounded-2xl border-2 border-line bg-white/80 p-5 text-xl leading-relaxed placeholder:text-mute/60 focus:border-apricot-deep focus:outline-none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .fade-in {
+    animation: fade 0.35s ease-out both;
+  }
+}
+@keyframes fade {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
 }
