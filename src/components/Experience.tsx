@@ -319,8 +319,9 @@ export default function Experience() {
       <main key={screen + (currentStep ?? "")} className="fade-in flex flex-1 flex-col">
         {screen === "start" && (
           <section className="relative left-1/2 flex w-screen flex-1 -translate-x-1/2 flex-col items-center justify-center bg-ink px-5 pt-6 pb-12 text-center text-paper">
-            <p className="text-xs tracking-[0.42em] text-gold-light">MEMORY · EMOTION · SCENT</p>
+            <p className="label !text-gold-light">Memory · Emotion · Scent</p>
             <h1 className="display mt-7 text-[clamp(3rem,7vw,5.6rem)] leading-none font-medium tracking-[-0.03em]">마음의 조각</h1>
+            <p className="mt-6 font-script text-[clamp(2rem,4vw,3rem)] leading-none text-gold-light">pieces of my heart</p>
             <span className="mt-8 h-px w-12 bg-gold-light/70" aria-hidden />
             <p className="display mt-8 text-[clamp(1.3rem,2.4vw,1.75rem)] leading-snug font-medium text-paper/85">오래 남아 있는 순간이 있나요?</p>
             <p className="mt-3 max-w-lg text-base leading-relaxed text-paper/50">기억 하나와 그때의 감정으로 그림 일기를 만들고, 향과 키링으로 가져가요.</p>
@@ -332,17 +333,17 @@ export default function Experience() {
               }}
             >
               <label className="flex flex-1 flex-col text-left">
-                <span className="text-xs tracking-[0.2em] text-paper/50">이름 또는 닉네임</span>
+                <span className="label !text-paper/50">이름 또는 닉네임</span>
                 <input id="pname" value={s.participantName} maxLength={20} onChange={(e) => set({ participantName: e.target.value })} placeholder="예: 마음이" className="mt-2 border-b border-paper/30 bg-transparent py-3 text-xl text-paper placeholder:text-paper/25 focus:border-gold-light focus:outline-none" autoComplete="off" enterKeyHint="go" />
               </label>
               <button type="submit" className="btn-main border border-gold-light bg-gold-light text-ink active:bg-gold disabled:border-paper/20 disabled:bg-transparent disabled:text-paper/35 disabled:opacity-100 sm:w-44" disabled={!s.participantName.trim()}>
                 시작하기 →
               </button>
             </form>
-            <ol className="mt-14 flex gap-6 text-sm tracking-[0.12em] text-paper/45 sm:gap-10">
+            <ol className="mt-14 flex gap-6 font-label text-sm tracking-[0.16em] text-paper/45 sm:gap-10">
               {["기억", "감정", "향과 키링"].map((t, i) => (
                 <li key={t}>
-                  <span className="mr-2 text-gold-light">0{i + 1}</span>
+                  <span className="disp-en mr-2 text-lg text-gold-light">0{i + 1}</span>
                   {t}
                 </li>
               ))}
@@ -413,8 +414,8 @@ export default function Experience() {
             <ul className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {categories.map((c, i) => (
                 <li key={c.id}>
-                  <button type="button" onClick={() => pickCategory(c)} className="flex h-full min-h-36 w-full flex-col justify-between rounded-[2px] border border-line bg-paper p-6 text-left active:bg-cream">
-                    <span className="display text-2xl text-apricot-deep">{String.fromCharCode(65 + i)}</span>
+                  <button type="button" onClick={() => pickCategory(c)} className="flex h-full min-h-36 w-full flex-col justify-between rounded-none border border-line bg-paper p-6 text-left active:bg-cream">
+                    <span className="disp-en text-4xl text-apricot-deep">{String.fromCharCode(65 + i)}</span>
                     <span>
                       <span className="display block text-2xl">{c.title}</span>
                       <span className="mt-1 block text-mute">{c.desc}</span>
@@ -488,7 +489,7 @@ export default function Experience() {
                     const v = st === "start" ? answers.start : st === "free" && answers.who ? `${answers.free} · ${answers.who}` : answers[st];
                     return (
                       <li key={st}>
-                        <button type="button" onClick={() => editStep(st)} className="min-h-12 rounded-[2px] border border-line bg-paper px-4 text-base active:bg-cream">
+                        <button type="button" onClick={() => editStep(st)} className="min-h-12 rounded-none border border-line bg-paper px-4 text-base active:bg-cream">
                           {v ?? "건너뜀"} <span className="text-mute">· 바꾸기</span>
                         </button>
                       </li>
@@ -657,7 +658,7 @@ export default function Experience() {
                   <legend className="display float-left mb-3 w-full text-xl">함께한 사람</legend>
                   <div role="radiogroup" aria-label="함께한 사람" className="flex flex-wrap gap-2">
                     {["없음", ...WHO.filter((w) => w !== "혼자")].map((w) => (
-                      <button key={w} type="button" role="radio" aria-checked={s.figures.who === w} onClick={() => pickWho(w)} className={`min-h-12 rounded-[2px] border px-4 text-base ${s.figures.who === w ? "border-ink bg-ink text-paper" : "border-ink/30 bg-paper/60 active:bg-cream"}`}>
+                      <button key={w} type="button" role="radio" aria-checked={s.figures.who === w} onClick={() => pickWho(w)} className={`min-h-12 rounded-none border px-4 text-base ${s.figures.who === w ? "border-ink bg-ink text-paper" : "border-ink/30 bg-paper/60 active:bg-cream"}`}>
                         {w === "없음" ? "없음 (나 혼자)" : w}
                       </button>
                     ))}
@@ -689,7 +690,7 @@ export default function Experience() {
             left={
               <>
                 <BackButton onClick={() => go("figures")} />
-                <p className="mt-6 text-sm tracking-[0.2em] text-gold">약 3분 · {heartPages.length}쪽</p>
+                <p className="label mt-6 !text-gold">약 3분 · {heartPages.length}쪽</p>
                 <h1 className="mt-3 display text-[clamp(2rem,4.4vw,3.2rem)]">요즘의 나를 체크해요.</h1>
                 <p className="mt-5 text-xl leading-relaxed text-mute">네 영역에서 요즘의 나와 닮은 문장을 모두 골라요. 끝나면 지금 마음에 맞는 향 조합을 추천해요.</p>
                 <Note>진단이 아닌 참고용이에요. 고른 문장은 AI로 보내지 않고 그림 일기에도 넣지 않아요. 코칭존 상담사에게만 전달돼요.</Note>
@@ -700,7 +701,7 @@ export default function Experience() {
                 <ol className="mb-8 border-t border-ink/15">
                   {AREAS.map((a, i) => (
                     <li key={a} className="flex items-baseline gap-5 border-b border-ink/15 py-5">
-                      <span className="display w-8 text-lg text-gold tabular-nums">0{i + 1}</span>
+                      <span className="disp-en w-8 text-2xl text-gold tabular-nums">0{i + 1}</span>
                       <span className="flex-1 text-xl">{a}</span>
                       <span className="text-base text-mute">{areaItems(a).length}문항</span>
                     </li>
@@ -872,7 +873,7 @@ function StepOptions({ cat, step, answers, onAnswer }: { cat: Category; step: St
           <p className="mt-2 mb-2 text-base text-mute">누구와 함께였나요? · 선택</p>
           <div className="flex flex-wrap gap-2">
             {WHO.map((w) => (
-              <button key={w} type="button" aria-pressed={who === w} onClick={() => setWho(who === w ? undefined : w)} className={`min-h-12 rounded-[2px] border px-4 text-base ${who === w ? "border-ink bg-ink text-paper" : "border-ink/30 bg-paper/60 active:bg-cream"}`}>
+              <button key={w} type="button" aria-pressed={who === w} onClick={() => setWho(who === w ? undefined : w)} className={`min-h-12 rounded-none border px-4 text-base ${who === w ? "border-ink bg-ink text-paper" : "border-ink/30 bg-paper/60 active:bg-cream"}`}>
                 {w}
               </button>
             ))}
@@ -1108,7 +1109,7 @@ function ScentResult({ name, checks, code, onSaved, onBack, onRetry, onNext }: {
                     ["베이스", "오래 남는 향", scent.base],
                   ] as const
                 ).map(([n, d, note]) => (
-                  <li key={n} className="flex items-center gap-5 rounded-[2px] border border-line bg-paper px-6 py-4">
+                  <li key={n} className="flex items-center gap-5 rounded-none border border-line bg-paper px-6 py-4">
                     <span className="w-16 shrink-0 text-sage-deep">
                       {n}
                       <span className="block text-xs text-mute">{d}</span>
@@ -1133,12 +1134,12 @@ function ScentResult({ name, checks, code, onSaved, onBack, onRetry, onNext }: {
       right={
         <div className="flex flex-col gap-3">
           {scent && (
-            <div className="mb-4 rounded-[2px] bg-cream/70 p-5" role="status">
+            <div className="mb-4 rounded-none bg-cream/70 p-5" role="status">
               {code ? (
                 <>
                   <p className="text-xl">{name}님, 체험을 마치면 코칭존으로 와 주세요.</p>
                   <p className="mt-2 text-lg text-mute">상담사에게 이름과 이 번호를 알려 주세요.</p>
-                  <p className="display mt-3 text-6xl tracking-[0.2em]">{code}</p>
+                  <p className="disp-en mt-3 text-7xl tracking-[0.12em]">{code}</p>
                 </>
               ) : err ? (
                 <>
@@ -1219,7 +1220,7 @@ function Segmented<T extends string>({ label, options, value, onChange, cols }: 
       <p className="mb-2 text-base text-mute">{label}</p>
       <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
         {options.map(([id, name]) => (
-          <button key={id} type="button" role="radio" aria-checked={value === id} onClick={() => onChange(id)} className={`min-h-12 rounded-[2px] border px-2 text-base ${value === id ? "border-ink bg-ink text-paper" : "border-ink/30 bg-transparent active:bg-ink/5"}`}>
+          <button key={id} type="button" role="radio" aria-checked={value === id} onClick={() => onChange(id)} className={`min-h-12 rounded-none border px-2 text-base ${value === id ? "border-ink bg-ink text-paper" : "border-ink/30 bg-transparent active:bg-ink/5"}`}>
             {name}
           </button>
         ))}
@@ -1241,7 +1242,7 @@ function Dialog({ title, body, confirm, cancel, autoConfirmMs, onConfirm, onCanc
     return () => clearTimeout(t);
   }, [autoConfirmMs]);
   return (
-    <dialog ref={ref} onCancel={onCancel} className="m-auto w-[min(92vw,30rem)] rounded-[2px] bg-paper p-8 text-brown backdrop:bg-brown/40">
+    <dialog ref={ref} onCancel={onCancel} className="m-auto w-[min(92vw,30rem)] rounded-none bg-paper p-8 text-brown backdrop:bg-brown/40">
       <h2 className="display text-2xl">{title}</h2>
       <p className="mt-3 text-lg leading-relaxed text-mute">{body}</p>
       <div className="mt-8 flex flex-col gap-3">

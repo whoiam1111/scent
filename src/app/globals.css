@@ -1,22 +1,25 @@
 @import "tailwindcss";
 
 @theme inline {
-  /* 향수 하우스처럼: 검정과 따뜻한 회베이지 면, 금빛 글자 하나 */
-  --color-ivory: #e8e1d6;
-  --color-paper: #f6f2ea;
-  --color-cream: #ddd4c6;
-  --color-apricot: #f1bf9f;
-  --color-apricot-deep: #8b7651;
-  --color-gold: #8b7651;
-  --color-gold-light: #c2ab7c;
-  --color-sage: #a9b79a;
-  --color-sage-deep: #7a6a48;
-  --color-brown: #0d0c0b;
-  --color-ink: #0d0c0b;
-  --color-mute: #6b6257;
-  --color-line: #cfc5b5;
-  --font-serif: var(--font-gowun), "Nanum Myeongjo", serif;
+  /* 아이보리 종이, 따뜻한 먹색 글씨, 테라코타 포인트 하나 */
+  --color-ivory: #f5f0e8;
+  --color-paper: #fbf8f2;
+  --color-cream: #e6d8c2;
+  --color-apricot: #e8d3c2;
+  --color-apricot-deep: #a9643c;
+  --color-gold: #a9643c;
+  --color-gold-light: #d79a72;
+  --color-sage: #b9b1a3;
+  --color-sage-deep: #a9643c;
+  --color-brown: #2b2926;
+  --color-ink: #2b2926;
+  --color-mute: #6c655b;
+  --color-line: #ddd2bf;
+  --font-serif: var(--font-noto-serif), "Nanum Myeongjo", serif;
   --font-display: var(--font-noto-serif), "Nanum Myeongjo", serif;
+  --font-en: var(--font-cormorant), "Times New Roman", serif;
+  --font-label: var(--font-jost), var(--font-noto), "Helvetica Neue", sans-serif;
+  --font-script: var(--font-script-src), "Snell Roundhand", cursive;
   --font-sans: var(--font-noto), "Apple SD Gothic Neo", system-ui, sans-serif;
   --font-pen: var(--font-pen-src), "Nanum Pen", cursive;
 }
@@ -24,54 +27,72 @@
 body {
   background: var(--color-ivory);
   color: var(--color-ink);
-  font-family: var(--font-sans);
+  font-family: var(--font-serif);
+  font-weight: 400;
+  line-height: 1.85;
   word-break: keep-all;
   overflow-wrap: anywhere;
+  -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
   overflow-x: clip; /* 첫 화면의 화면 너비 그림 */
 }
 
 :focus-visible {
-  outline: 3px solid var(--color-apricot-deep);
+  outline: 2px solid var(--color-gold);
   outline-offset: 3px;
 }
 
 @layer components {
-  /* 화면 제목: 획 대비가 큰 명조 */
+  /* 화면 제목: 가는 명조 */
   .display {
     font-family: var(--font-display);
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    line-height: 1.2;
+    font-weight: 300;
+    letter-spacing: -0.01em;
+    line-height: 1.38;
+    text-wrap: balance;
+  }
+  /* 영문·숫자 장식: 이탤릭 세리프 */
+  .disp-en {
+    font-family: var(--font-en);
+    font-style: italic;
+    font-weight: 400;
+    letter-spacing: 0;
+  }
+  .label {
+    font-family: var(--font-label);
+    font-size: 0.75rem;
+    font-weight: 400;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--color-mute);
   }
   .btn-main,
   .btn-soft {
-    @apply inline-flex min-h-16 items-center justify-center rounded-[2px] px-8 text-lg font-medium tracking-[0.06em] transition-colors duration-150 select-none disabled:cursor-not-allowed disabled:opacity-30;
+    @apply inline-flex min-h-16 items-center justify-center gap-2.5 rounded-none border px-8 font-label text-base tracking-[0.16em] uppercase transition-colors duration-200 select-none disabled:cursor-not-allowed disabled:opacity-30;
   }
   .btn-main {
-    @apply bg-ink text-paper active:bg-[#2a2622];
+    @apply border-ink bg-ink text-ivory hover:border-gold hover:bg-gold active:border-gold active:bg-gold;
   }
   .btn-soft {
-    @apply border-[1.5px] border-ink bg-transparent text-ink active:bg-ink/10;
+    @apply border-ink bg-transparent text-ink hover:bg-ink hover:text-ivory active:bg-ink active:text-ivory;
   }
-  /* 금빛 글자 링크 */
   .btn-text {
-    @apply inline-flex min-h-12 items-center gap-2 px-2 text-base font-medium tracking-[0.08em] text-gold active:text-ink;
+    @apply inline-flex min-h-12 items-center gap-2 px-2 font-label text-sm tracking-[0.16em] text-gold uppercase active:text-ink;
   }
   .choice {
-    @apply flex min-h-18 w-full items-center rounded-[2px] border border-ink/20 bg-paper/60 px-6 py-4 text-left text-lg leading-snug transition-colors duration-150 active:bg-cream;
+    @apply flex min-h-18 w-full items-center rounded-none border border-line bg-paper px-6 py-4 text-left text-lg leading-snug font-light transition-colors duration-200 active:bg-cream;
   }
   .choice[aria-pressed="true"] {
-    @apply border-ink bg-ink text-paper;
+    @apply border-ink bg-ink text-ivory;
   }
   .field {
-    @apply w-full rounded-[2px] border border-ink/25 bg-paper/80 p-5 text-xl leading-relaxed placeholder:text-mute/60 focus:border-ink focus:outline-none;
+    @apply w-full rounded-none border border-line bg-paper p-5 text-xl leading-relaxed font-light placeholder:text-mute/60 focus:border-gold focus:outline-none;
   }
 }
 
 @media (prefers-reduced-motion: no-preference) {
   .fade-in {
-    animation: fade 0.35s ease-out both;
+    animation: fade 0.5s ease-out both;
   }
 }
 @keyframes fade {
