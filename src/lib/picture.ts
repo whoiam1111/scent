@@ -1,8 +1,8 @@
 import type { SceneHints } from "./diary";
 import type { Figure, PictureStyle } from "./figures";
 
-// 생성형 그림(Cloudflare Workers AI · FLUX)용 영어 프롬프트. 한국 팝업이라 장소·사람을 한국으로 맞춘다.
-// FLUX는 키워드 나열보다 문장형 묘사를 잘 따른다: 무엇(매체) → 누가 → 어디서·언제 → 구체 묘사 → 분위기 → 촬영/화풍 순서.
+// 생성형 그림(Higgsfield SOUL)용 영어 프롬프트. 한국 팝업이라 장소·사람을 한국으로 맞춘다.
+// 이미지 모델은 키워드 나열보다 문장형 묘사를 잘 따른다: 무엇(매체) → 누가 → 어디서·언제 → 구체 묘사 → 분위기 → 촬영/화풍 순서.
 // 한국어는 잘 못 알아들어서 정해진 영어 표현을 쓰고, AI가 만든 영어 장면 묘사(description)가 있으면 가운데 넣는다.
 
 const STYLE: Record<PictureStyle, { medium: string; finish: string }> = {

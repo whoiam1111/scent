@@ -1,12 +1,15 @@
 import { z } from "zod";
 import { picturePrompt } from "@/lib/picture";
 
-// 그림 생성: Cloudflare Workers AI (FLUX.1 schnell). 무료 한도는 하루 1만 뉴런(1024px 약 170장).
-// 키가 없거나 실패하면 화면이 템플릿 그림으로 대신한다. 받은 내용과 그림은 저장하지 않는다.
-export const maxDuration = 30;
+// 그림 생성: Higgsfield (SOUL, 1:1 720p). 비동기라 제출 후 완료될 때까지 상태를 조회한다.
+// 키가 없거나 실패하면 화면이 템플릿 그림으로 대신한다. 받은 그림은 data URL로 넘기고 Higgsfield 쪽 기록은 바로 지운다.
+export const maxDuration = 60;
 
-const MODEL = "@cf/black-forest-labs/flux-1-schnell";
-const enabled = () => Boolean(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN);
+const API = "https://api.higgsfield.ai";
+const MODEL = "higgsfield-ai/soul/standard";
+const enabled = () => Boolean(process.env.HF_CREDENTIALS);
+const auth = () => ({ Authorization: `Key ${process.env.HF_CREDENTIALS}` });
+const DONE = ["completed", "failed", "nsfw", "canceled"];
 
 const Figure = z.object({
   gender: z.enum(["none", "female", "male"]),
@@ -32,19 +35,38 @@ export async function POST(req: Request) {
   if (!parsed.success) return Response.json({ error: "요청을 확인해 주세요." }, { status: 400 });
 
   try {
-    const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/ai/run/${MODEL}`, {
+    const deadline = Date.now() + 45_000;
+    const sub = await fetch(`${API}/${MODEL}`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: picturePrompt(parsed.data), steps: 6 }),
-      signal: AbortSignal.timeout(25_000),
+      headers: { ...auth(), "Content-Type": "application/json", "Hf-Expires-After": "3600" },
+      body: JSON.stringify({ prompt: picturePrompt(parsed.data), aspect_ratio: "1:1", resolution: "720p", batch_size: 1 }),
+      signal: AbortSignal.timeout(15_000),
     });
-    const j = await res.json().catch(() => null);
-    const image: unknown = j?.result?.image ?? j?.image;
-    if (!res.ok || typeof image !== "string") {
-      console.error("picture generation failed", res.status, j?.errors?.[0]?.code); // 한도 초과면 보통 429
+    let j = await sub.json().catch(() => null);
+    if (!sub.ok || typeof j?.status_url !== "string") {
+      console.error("picture generation failed", sub.status, j?.detail ?? j?.error); // 크레딧 부족이면 보통 402
       return Response.json({ error: "그림을 만들지 못했어요." }, { status: 502 });
     }
-    return Response.json({ image: `data:image/jpeg;base64,${image}` });
+    const id: string = j.request_id;
+    const statusUrl: string = j.status_url;
+    for (let delay = 1500; !DONE.includes(j?.status) && Date.now() < deadline; delay = Math.min(delay * 1.5, 5000)) {
+      await new Promise((r) => setTimeout(r, delay));
+      const st = await fetch(statusUrl, { headers: auth(), signal: AbortSignal.timeout(10_000) });
+      if (st.ok) j = await st.json().catch(() => j);
+    }
+    const url: unknown = j?.images?.[0]?.url;
+    if (j?.status !== "completed" || typeof url !== "string") {
+      if (!DONE.includes(j?.status)) fetch(`${API}/requests/${id}/cancel`, { method: "POST", headers: auth() }).catch(() => {});
+      console.error("picture generation failed", j?.status);
+      return Response.json({ error: "그림을 만들지 못했어요." }, { status: 502 });
+    }
+    // 키링 저장(캔버스)이 막히지 않게 서버에서 받아 data URL로 넘긴다
+    const img = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+    if (!img.ok) throw new Error("download");
+    const type = img.headers.get("content-type") ?? "image/jpeg";
+    const b64 = Buffer.from(await img.arrayBuffer()).toString("base64");
+    fetch(`${API}/requests/${id}`, { method: "DELETE", headers: auth() }).catch(() => {});
+    return Response.json({ image: `data:${type};base64,${b64}` });
   } catch (e) {
     console.error("picture generation failed", (e as Error).name);
     return Response.json({ error: "그림을 만들지 못했어요." }, { status: 502 });

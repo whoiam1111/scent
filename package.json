@@ -7,10 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --no-warnings scripts/selftest.mjs"
+    "test": "node --no-warnings scripts/selftest.mjs",
+    "image": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --env-file-if-exists=.env.local index.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.137.0",
+    "@higgsfield/client": "^0.2.6",
     "html-to-image": "1.11.13",
     "next": "16.4.2",
     "react": "19.3.0",

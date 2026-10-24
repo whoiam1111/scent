@@ -9,7 +9,7 @@ import { demoDiary, detectScene } from "@/lib/diary";
 const aiEnabled = () => Boolean(process.env.ANTHROPIC_API_KEY);
 
 export function GET() {
-  return Response.json({ ai: aiEnabled(), picture: Boolean(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN) });
+  return Response.json({ ai: aiEnabled(), picture: Boolean(process.env.HF_CREDENTIALS) });
 }
 
 const Body = z.object({
