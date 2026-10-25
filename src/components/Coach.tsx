@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { AREAS, scoreHeart, type HeartScore } from "@/lib/heart";
 import type { HeartRow } from "@/lib/heartStore";
-import { SCENTS } from "@/lib/scent";
+import { NOTES, SCENTS } from "@/lib/scent";
 
 // 코칭존 상담사 화면: 참가자가 알려 준 이름으로 찾는다. 목록에서 누르면 결과지로 넘어가고 '목록'으로 돌아온다.
 
@@ -12,6 +12,12 @@ const time = (iso: string) => new Date(iso).toLocaleTimeString("ko-KR", { hour: 
 const topOf = (sc: HeartScore[]) => sc.filter((x) => x.ratio === sc[0].ratio && x.ratio > 0);
 // 한글 라벨: 영문 대문자용 .label보다 자간을 좁힌다
 const LABEL = "font-label text-xs tracking-[0.06em] text-mute";
+// 참가자에게 보여 준 향. 저장된 것이 없으면(예전 결과·scent 칸 없는 DB) 같은 규칙으로 다시 계산한다
+const scentOf = (r: HeartRow) => {
+  if (r.scent) return r.scent;
+  const top = scoreHeart(new Set(r.checks))[0];
+  return top.ratio > 0 ? { type: top.type.name, ...SCENTS[top.type.name] } : null;
+};
 
 export default function Coach() {
   const [rows, setRows] = useState<HeartRow[]>([]);
@@ -120,6 +126,7 @@ export default function Coach() {
             <ul className="mt-4 border-t border-line">
               {shown.map((r) => {
                 const top = topOf(scoreHeart(new Set(r.checks)));
+                const sc = scentOf(r);
                 return (
                   <li key={r.id}>
                     <button
@@ -128,7 +135,10 @@ export default function Coach() {
                       className="grid w-full grid-cols-[minmax(6rem,12rem)_1fr_auto_auto] items-center gap-x-5 border-b border-line bg-paper px-5 py-4 text-left transition-colors hover:bg-cream/60 max-sm:grid-cols-[1fr_auto]"
                     >
                       <span className="truncate text-lg font-bold">{r.name}</span>
-                      <span className="truncate text-mute max-sm:col-span-2 max-sm:row-start-2">{top.map((x) => x.type.name).join(" · ") || "체크 없음"}</span>
+                      <span className="min-w-0 max-sm:col-span-2 max-sm:row-start-2">
+                        <span className="block truncate text-mute">{top.map((x) => x.type.name).join(" · ") || "체크 없음"}</span>
+                        {sc && <span className="block truncate text-sm">향 {sc.top} · {sc.middle} · {sc.base}</span>}
+                      </span>
                       <span className={`px-2 font-label text-xs tracking-[0.08em] max-sm:hidden ${r.keyring_at ? "bg-apricot text-gold" : "invisible"}`}>키링</span>
                       <span className="flex items-center gap-3 font-label text-sm text-mute tabular-nums">
                         {time(r.created_at)}
@@ -171,6 +181,7 @@ function Sheet({ row, onBack, onDelete }: { row: HeartRow; onBack: () => void; o
   const top = scores.filter((x) => x.ratio === scores[0].ratio);
   const max = scores[0].ratio || 1;
   const img = `/api/coach/keyring?id=${row.id}`;
+  const sc = scentOf(row);
 
   return (
     <article className="border border-line bg-paper print:border-0">
@@ -201,6 +212,31 @@ function Sheet({ row, onBack, onDelete }: { row: HeartRow; onBack: () => void; o
           <p className="mt-1 text-mute">
             체크 {row.checks.length}개 · {Math.round(scores[0].ratio * 100)}% ({scores[0].picked.length}/{scores[0].total}문항)
           </p>
+
+          {/* 조향 레시피: 참가자 화면에 보여 준 그대로 */}
+          {sc && (
+            <section className="mt-6 border border-ink px-5 py-4 break-inside-avoid">
+              <h3 className="flex items-baseline justify-between gap-3">
+                <span className="text-lg font-bold">조향 레시피</span>
+                <span className={LABEL}>{sc.type} 기준 · 참가자에게 안내한 향</span>
+              </h3>
+              <dl className="mt-3 grid gap-3 sm:grid-cols-3">
+                {(
+                  [
+                    ["탑", sc.top],
+                    ["미들", sc.middle],
+                    ["베이스", sc.base],
+                  ] as const
+                ).map(([k, v]) => (
+                  <div key={k} className="border-t border-line pt-2">
+                    <dt className={LABEL}>{k}</dt>
+                    <dd className="mt-1 text-xl font-bold">{v}</dd>
+                    {NOTES[v] && <dd className="text-sm text-mute">{NOTES[v]}</dd>}
+                  </div>
+                ))}
+              </dl>
+            </section>
+          )}
 
           {/* 유형별 분포: 가장 높은 유형을 막대 끝으로 맞춰 차이가 잘 보이게 */}
           <h3 className={`${LABEL} mt-8 border-b border-line pb-2`}>유형별 분포</h3>

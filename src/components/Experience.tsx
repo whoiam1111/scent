@@ -999,24 +999,38 @@ function Result({ s, emotions, onRedo, onRestart }: { s: State; emotions: string
     };
   }, [renderKey, transparent]);
 
-  // 저장하면 코칭존에도 같은 PNG를 보낸다 (상담 번호가 있을 때). 다시 저장하면 마지막 것으로 바뀐다
-  const [sendState, setSendState] = useState<"" | "sending" | "sent" | "error">("");
-  const download = async () => {
+  const download = () => {
     if (!png) return;
     const a = document.createElement("a");
     a.href = png.url;
     a.download = `마음의조각-${theme}-${new Date(s.createdAt ?? Date.now()).toISOString().slice(0, 10)}.png`;
     a.click();
-    if (!s.heartId) return;
-    setSendState("sending");
-    try {
-      const blob = await (await fetch(png.url)).blob();
-      const res = await fetch(`/api/heart/keyring?id=${s.heartId}`, { method: "POST", headers: { "Content-Type": "image/png" }, body: blob });
-      setSendState(res.ok ? "sent" : "error");
-    } catch {
-      setSendState("error");
-    }
   };
+
+  // 꾸미기를 멈추고 잠시 지나면 지금 카드를 코칭존으로 자동으로 보낸다 (버튼을 안 눌러도 키링을 만들 수 있게).
+  // 다시 꾸미면 마지막 모습으로 덮어쓴다. 서버 제한(4MB)에 가까우면 가로 1000px로 다시 찍어 보낸다
+  const [sendState, setSendState] = useState<"" | "sending" | "sent" | "error">("");
+  const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    const card = cardRef.current?.firstElementChild;
+    if (!png || !s.heartId || !(card instanceof HTMLElement)) return;
+    let alive = true;
+    const t = setTimeout(async () => {
+      setSendState("sending");
+      try {
+        let blob = await (await fetch(png.url)).blob();
+        if (blob.size > 3_800_000) blob = await cardToPng(card, transparent, 1000);
+        const res = await fetch(`/api/heart/keyring?id=${s.heartId}`, { method: "POST", headers: { "Content-Type": "image/png" }, body: blob });
+        if (alive) setSendState(res.ok ? "sent" : "error");
+      } catch {
+        if (alive) setSendState("error");
+      }
+    }, 2500);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [png, s.heartId, transparent, retry]);
 
   const sentence = s.generationMode === "ai" ? "문장: AI 생성" : s.generationMode === "demo-fallback" ? "문장: 데모 (AI 생성 실패로 대체)" : "문장: 데모";
   const label = `${sentence} · 그림: ${s.pictureAi ? "AI 생성" : "일러스트 템플릿"}`;
@@ -1068,8 +1082,13 @@ function Result({ s, emotions, onRedo, onRestart }: { s: State; emotions: string
         </button>
         <p className="text-center text-sm text-mute">그림 일기와 같은 모양 · 가로 1500px PNG · 저장이 안 되면 위 이미지를 길게 눌러 저장하세요.</p>
         {sendState && (
-          <p role="status" className={`text-center text-base ${sendState === "error" ? "text-gold" : "text-ink"}`}>
-            {sendState === "sending" ? "코칭존으로 보내는 중…" : sendState === "sent" ? "코칭존으로 보냈어요" : "코칭존으로 보내지 못했어요. 다시 저장해 주세요."}
+          <p role="status" className={`text-center text-base ${sendState === "error" ? "text-gold" : "text-mute"}`}>
+            {sendState === "sending" ? "코칭존으로 키링 이미지를 보내는 중…" : sendState === "sent" ? "✓ 지금 모습으로 코칭존에 전달됐어요" : "코칭존으로 보내지 못했어요."}
+            {sendState === "error" && (
+              <button type="button" className="btn-text ml-1" onClick={() => setRetry((n) => n + 1)}>
+                다시 보내기
+              </button>
+            )}
           </p>
         )}
         <button type="button" className="btn-soft w-full" onClick={onRedo}>

@@ -9,12 +9,12 @@ const PAGE = "#e8e1d6"; // 입장권 홈과 같은 색
 const fontCSS = new Map<string, Promise<string>>();
 const familiesIn = (el: HTMLElement) => [...new Set([el, ...el.querySelectorAll("*")].map((e) => getComputedStyle(e).fontFamily))].sort().join("|");
 
-export async function cardToPng(card: HTMLElement, transparent: boolean): Promise<Blob> {
+export async function cardToPng(card: HTMLElement, transparent: boolean, width = KEYRING_WIDTH): Promise<Blob> {
   await document.fonts.ready;
   const key = familiesIn(card);
   if (!fontCSS.has(key)) fontCSS.set(key, getFontEmbedCSS(card));
   // backgroundColor 옵션은 카드 자체의 바탕을 덮어써서 쓰지 않고, 아래에서 따로 깐다
-  const opts = { fontEmbedCSS: await fontCSS.get(key), pixelRatio: KEYRING_WIDTH / card.offsetWidth, style: { rotate: "none", transform: "none", margin: "0" } }; // 폴라로이드 기울기는 화면용
+  const opts = { fontEmbedCSS: await fontCSS.get(key), pixelRatio: width / card.offsetWidth, style: { rotate: "none", transform: "none", margin: "0" } }; // 폴라로이드 기울기는 화면용
   // shortcut: Safari는 첫 렌더에서 그림이 빠지는 일이 있어 한 번 더 찍는다. 라이브러리가 고치면 제거
   await toCanvas(card, opts);
   const shot = await toCanvas(card, opts);
