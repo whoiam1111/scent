@@ -14,20 +14,15 @@ export const THEMES: [Theme, string][] = [
   ["pieces", "종이 조각"],
 ];
 
-export type DiaryFont = "auto" | "serif" | "sans" | "pen";
+export type DiaryFont = "bookk" | "saeeum" | "omiri";
 export type DiaryAlign = "auto" | "left" | "center" | "right";
 export const FONTS: [DiaryFont, string][] = [
-  ["auto", "기본"],
-  ["serif", "명조"],
-  ["sans", "고딕"],
-  ["pen", "손글씨"],
+  ["bookk", "부크크명조"],
+  ["saeeum", "강원교육새음"],
+  ["omiri", "오미리손글씨"],
 ];
-const PEN_SIZE: Record<string, string> = {
-  "text-lg": "text-[1.5rem]",
-  "text-[2rem]": "text-[2.6rem]",
-  "text-[2.2rem]": "text-[2.8rem]",
-  "text-[2.5rem]": "text-[3.1rem]",
-};
+const FONT_CLASS: Record<DiaryFont, string> = { bookk: "font-[family-name:var(--font-bookk)]", saeeum: "font-[family-name:var(--font-saeeum)]", omiri: "font-[family-name:var(--font-omiri)]" };
+const SMALLER: Record<string, string> = { "text-[2.4rem]": "text-[2rem]", "text-[1.6rem]": "text-xl" };
 
 export const ALIGNS: [DiaryAlign, string][] = [
   ["auto", "기본"],
@@ -81,20 +76,16 @@ const batchim = (w: string) => {
 };
 export const and = (xs: string[]) => xs.map((x, i) => (i < xs.length - 1 ? x + (batchim(x) ? "과" : "와") : x)).join(" ");
 
-export default function DiaryCard({ theme, title, text, illustration, createdAt, emotions, font = "auto", align = "auto", bg = "auto", ink = "", accent = "" }: Props) {
+export default function DiaryCard({ theme, title, text, illustration, createdAt, emotions, font = "bookk", align = "auto", bg = "auto", ink = "", accent = "" }: Props) {
   // 바탕 면의 색과 그 위 글자색. def = 디자인 기본 바탕, defText = 기본 글자색
   const [, , fill, light] = BGS.find(([id]) => id === bg) ?? BGS[0];
   const surface = (def: string, defText: string) => {
     const base = fill ? { background: fill, color: light ? (defText === LIGHT_TEXT ? DARK_TEXT : defText) : LIGHT_TEXT } : { background: def, color: defText };
     return ink ? { ...base, color: ink } : base;
   };
-  // 제목·일기·감정 줄에만 적용. "기본"이면 디자인마다 정해 둔 글꼴·정렬을 쓴다
-  // 손글씨는 글자 몸이 작아서, 손글씨가 기본이 아닌 디자인에 고르면 한 단계 크게 쓴다
-  const f = (def: string, size: string) => {
-    if (font === "auto" || (font === "pen" && def === "font-pen")) return `${def} ${size}`;
-    if (font === "pen") return `font-pen ${PEN_SIZE[size] ?? size}`;
-    return `${font === "serif" ? "font-serif" : "font-sans"} ${size}`;
-  };
+  // 제목·일기·감정 줄에만 적용. 디자인마다 정한 기본 글꼴(def) 대신 고른 글씨체를 쓴다
+  // 나눔펜 기준으로 키워 둔 손글씨 디자인(그림일기장)은 다른 글씨체에서 한 단계 줄인다
+  const f = (def: string, size: string) => `${FONT_CLASS[font]} ${def === "font-pen" ? (SMALLER[size] ?? size) : size}`;
   const a = align === "auto" ? "" : { left: "text-left", center: "text-center", right: "text-right" }[align];
   const img = illustration.startsWith("data:") ? illustration : svgToDataUrl(illustration); // 생성형 그림은 이미 data URL
   const date = createdAt ? new Date(createdAt) : null;

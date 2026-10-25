@@ -1443,7 +1443,7 @@ function Result({
 }) {
     const [transparent, setTransparent] = useState(false);
     const [theme, setTheme] = useState<Theme>('book');
-    const [font, setFont] = useState<DiaryFont>('auto');
+    const [font, setFont] = useState<DiaryFont>('bookk');
     const [align, setAlign] = useState<DiaryAlign>('auto');
     const [bg, setBg] = useState<DiaryBg>('auto');
     const [ink, setInk] = useState('');
@@ -1583,7 +1583,7 @@ function Result({
                 <h2 className="mt-6 border-t border-ink/15 pt-6 display text-2xl">꾸미기</h2>
                 <p className="-mt-2 text-base text-mute">그림 일기와 키링에 같이 적용돼요.</p>
                 <Segmented label="디자인" options={THEMES} value={theme} onChange={setTheme} cols={3} />
-                <Segmented label="글씨체" options={FONTS} value={font} onChange={setFont} cols={4} />
+                <Segmented label="글씨체" options={FONTS} value={font} onChange={setFont} cols={3} />
                 <Segmented label="정렬" options={ALIGNS} value={align} onChange={setAlign} cols={4} />
                 <Swatches
                     label="배경색"
