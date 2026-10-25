@@ -1,7 +1,7 @@
 import type { SceneHints } from "./diary";
 import type { Figure, PictureStyle } from "./figures";
 
-// 생성형 그림(Higgsfield SOUL)용 영어 프롬프트. 한국 팝업이라 장소·사람을 한국으로 맞춘다.
+// 생성형 그림(OpenAI gpt-image)용 영어 프롬프트. 한국 팝업이라 장소·사람을 한국으로 맞춘다.
 // 이미지 모델은 키워드 나열보다 문장형 묘사를 잘 따른다: 무엇(매체) → 누가 → 어디서·언제 → 구체 묘사 → 분위기 → 촬영/화풍 순서.
 // 한국어는 잘 못 알아들어서 정해진 영어 표현을 쓰고, AI가 만든 영어 장면 묘사(description)가 있으면 가운데 넣는다.
 
@@ -12,7 +12,12 @@ const STYLE: Record<PictureStyle, { medium: string; finish: string }> = {
   },
   photo: {
     medium: "A realistic candid photograph",
-    finish: "Shot on 35mm film with natural light, shallow depth of field, true-to-life colors, subtle film grain, documentary style.",
+    finish: "It looks like a real photo, not an illustration or 3D render: shot on 35mm film with natural light, shallow depth of field, true-to-life skin tones and colors, subtle film grain, documentary style.",
+  },
+  // 한국 아동 3D 애니메이션(뽀로로 같은) 느낌. 캐릭터 이름은 넣지 않는다: 저작권 캐릭터를 그대로 그리거나 거절될 수 있다
+  cartoon: {
+    medium: "A cute 3D animated still in the style of a Korean children's TV cartoon",
+    finish: "Rendered like a cheerful kids' animation: soft rounded chubby shapes, big round expressive eyes, small simple features, smooth clean CG surfaces, bright pastel colors, soft even lighting, playful and heartwarming. Original characters only, no existing cartoon characters.",
   },
 };
 const NO_MARKS = "The image fills the whole frame edge to edge with no white margin and no border. No writing anywhere: no signs with letters, no text, no signature, no watermark.";
@@ -66,18 +71,20 @@ export type PictureInput = { hints: SceneHints; me: Figure; mate: Figure; who: s
 
 export function picturePrompt({ hints, me, mate, who, emotions, description, style = "watercolor" }: PictureInput): string {
   const st = STYLE[style];
-  // 얼굴은 보이지 않게 (실제 인물처럼 보이지 않도록 늘 뒷모습). 사람 수를 앞에 두어야 FLUX가 빠뜨리지 않는다
+  // 앞모습도 괜찮다. 사람 수를 앞에 두어야 모델이 빠뜨리지 않는다
   const who2 = RELATION[who] ? `, ${RELATION[who]}` : "";
   const subject =
     hints.people === 0
       ? "a quiet scene with no people"
       : hints.people === 1
-        ? `${personText(me)} seen from behind, face not visible`
-        : `exactly two people, ${personText(me)} and ${personText(mate)}${who2}, side by side and seen from behind, faces not visible`;
+        ? `${personText(me)} with a natural expression`
+        : `exactly two people, ${personText(me)} and ${personText(mate)}${who2}, together with natural expressions`;
   const mood = emotions.map((e) => MOOD[e]).filter(Boolean).join(" and ");
   return [
     `${st.medium} of ${subject}, ${SCENE[hints.scene]} in South Korea, ${SKY[hints.sky]}.`,
     description?.trim().replace(/([^.])$/, "$1."),
+    // 모델이 서양인 얼굴로 기울지 않게 따로 못박는다
+    hints.people > 0 && `${hints.people === 1 ? "The person is" : "Both people are"} Korean, with East Asian facial features, natural black or dark brown hair and everyday Korean clothing and styling.`,
     mood && `The moment feels ${mood}, and the light, colors and posture carry that feeling.`,
     st.finish,
     NO_MARKS,

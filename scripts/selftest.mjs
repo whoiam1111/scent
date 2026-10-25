@@ -56,13 +56,16 @@ assert.ok(heartPages.every((p) => p.items.length >= PAGE_SIZE && p.items.length 
 assert.deepEqual(guessMate("할머니와 엄마랑 시장에 갔다"), { word: "할머니", figure: { gender: "female", age: "senior" } });
 assert.equal(guessMate("혼자 걸었다"), null);
 
-// 그림 프롬프트: 장면·날씨·인물이 영어로, 얼굴 없이 뒷모습
+// 그림 프롬프트: 장면·날씨·인물이 영어로, 인물은 한국인
 const pp = picturePrompt({ hints: { scene: "sea", sky: "rain", people: 2 }, me: { gender: "female", age: "child" }, mate: { gender: "female", age: "middle" }, who: "엄마", emotions: ["그리움"], description: "a yellow umbrella" });
-assert.ok(pp.startsWith("A delicate watercolor painting of exactly two people, a little Korean girl and a middle-aged Korean woman, mother, side by side and seen from behind, faces not visible, on a sandy east-coast beach with calm waves in South Korea, on a rainy day with wet reflections. a yellow umbrella."), pp);
+assert.ok(pp.startsWith("A delicate watercolor painting of exactly two people, a little Korean girl and a middle-aged Korean woman, mother, together with natural expressions, on a sandy east-coast beach with calm waves in South Korea, on a rainy day with wet reflections. a yellow umbrella."), pp);
 assert.match(pp, /feels nostalgic/);
 assert.ok(pp.length < 2000);
 assert.match(pp, /watercolor/);
-assert.match(picturePrompt({ hints: { scene: "sea", sky: "day", people: 1 }, me: { gender: "none", age: "" }, mate: { gender: "none", age: "" }, who: "", emotions: [], style: "photo" }), /A realistic candid photograph of a Korean person seen from behind/);
-assert.doesNotMatch(picturePrompt({ hints: { scene: "field", sky: "day", people: 0 }, me: { gender: "none", age: "" }, mate: { gender: "none", age: "" }, who: "", emotions: ["기타"] }), /undefined|seen from behind/);
+assert.match(pp, /Both people are Korean, with East Asian facial features/);
+assert.doesNotMatch(pp, /behind|not visible/);
+assert.match(picturePrompt({ hints: { scene: "sea", sky: "day", people: 1 }, me: { gender: "none", age: "" }, mate: { gender: "none", age: "" }, who: "", emotions: [], style: "photo" }), /A realistic candid photograph of a Korean person with a natural expression.*The person is Korean.*not an illustration/);
+assert.match(picturePrompt({ hints: { scene: "home", sky: "day", people: 1 }, me: { gender: "male", age: "child" }, mate: { gender: "none", age: "" }, who: "", emotions: [], style: "cartoon" }), /^A cute 3D animated still.*a little Korean boy.*Original characters only/);
+assert.doesNotMatch(picturePrompt({ hints: { scene: "field", sky: "day", people: 0 }, me: { gender: "none", age: "" }, mate: { gender: "none", age: "" }, who: "", emotions: ["기타"] }), /undefined|Korean, with/);
 
 console.log("selftest ok");
