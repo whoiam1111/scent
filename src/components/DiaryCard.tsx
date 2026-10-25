@@ -49,7 +49,7 @@ export const BGS: [DiaryBg, string, string, boolean][] = [
   ["forest", "숲", "#3c4c3d", false],
   ["black", "먹", "#141210", false],
 ];
-// 글자색·포인트색: "" = 디자인 기본. 포인트색은 표지·입장권 바탕(배경색이 기본일 때), 향 이름 줄, 테이프에 쓰인다
+// 글자색·포인트색: "" = 디자인 기본. 포인트색은 표지 띠·입장권 바탕(배경색이 기본일 때), 향 이름 줄, 테이프에 쓰인다
 export const INKS: [string, string][] = [
   ["", "기본"],
   ["#141210", "먹"],
@@ -205,14 +205,26 @@ export default function DiaryCard({ theme, title, text, illustration, createdAt,
       </article>
     );
 
-  // 문학전집 표지: 감정 색 한 면, 흰 테를 두른 그림 판, 명조 제목, 감정은 저자 자리
+  // 문학전집 표지: 위는 그림, 아래 흰 면에 전집 번호 → 감정 색 띠 사이 명조 제목 → 감정 띠 → 지은이. 띠는 오른쪽 끝까지 이어진다
+  const no = [...title].reduce((n, c) => (n * 31 + c.charCodeAt(0)) % 900, 7) + 100; // 제목마다 같은 번호
   return (
-    <article className="mx-auto flex aspect-[2/3] max-w-md flex-col px-9 pt-10 pb-8" style={surface(pal.accent, LIGHT_TEXT)}>
-      <img src={img} alt={alt} className="aspect-[4/3] w-full border-[10px] border-[#f6f2ea] object-cover" />
-      <h1 className={`mt-9 ${f("font-serif", "text-[2.5rem]")} ${a} leading-[1.15] font-bold`}>{title}</h1>
-      <p className={`mt-3 text-lg opacity-90 ${a}`}>{and(emotions)}</p>
-      <p className={`mt-6 ${f("font-serif", "text-lg")} ${a} leading-relaxed whitespace-pre-line opacity-95`}>{text}</p>
-      <p className="mt-auto pt-6 font-serif text-lg">마음의 조각</p>
+    <article className="mx-auto flex aspect-[2/3] max-w-md flex-col overflow-hidden" style={surface("#ffffff", DARK_TEXT)}>
+      <img src={img} alt={alt} className="aspect-[16/10] w-full object-cover" />
+      <div className="flex flex-1 flex-col pt-5 pb-6 pl-8">
+        <p className="flex items-baseline gap-2 pr-8 text-sm font-bold tracking-tight">
+          마음의 조각 문학전집 <span className="font-en text-xl font-normal italic">{no}</span>
+        </p>
+        <span className="mt-3 h-1.5" style={{ background: pal.accent }} />
+        <h1 className={`py-3 pr-8 ${f("font-serif", "text-[2.2rem]")} ${a} leading-[1.2] font-normal`}>{title}</h1>
+        <p className={`px-3 py-1 font-label text-sm tracking-[0.08em] text-white ${a}`} style={{ background: pal.accent }}>
+          {and(emotions)} · {date?.toLocaleDateString("ko-KR")}
+        </p>
+        <p className="mt-3 pr-8 text-base font-bold">
+          오늘의 나 <span className="ml-1 text-xs font-normal opacity-70">지음</span>
+        </p>
+        <p className={`mt-4 pr-8 ${f("font-serif", "text-base")} ${a} leading-relaxed whitespace-pre-line opacity-90`}>{text}</p>
+        <p className="mt-auto pt-4 text-base font-bold tracking-tight">마음의 조각</p>
+      </div>
     </article>
   );
 }

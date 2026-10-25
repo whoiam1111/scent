@@ -23,6 +23,7 @@ const Body = z.object({
   who: z.string().max(10),
   emotions: z.array(z.string().max(20)).max(2),
   description: z.string().max(400).optional(),
+  details: z.string().trim().max(300).optional(), // 참가자가 직접 적은 옷차림·머리 모양 (한국어)
   style: z.enum(["watercolor", "photo", "cartoon"]).optional(),
 });
 

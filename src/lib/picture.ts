@@ -67,9 +67,9 @@ export function personText(f: Figure): string {
   }
 }
 
-export type PictureInput = { hints: SceneHints; me: Figure; mate: Figure; who: string; emotions: string[]; description?: string; style?: PictureStyle };
+export type PictureInput = { hints: SceneHints; me: Figure; mate: Figure; who: string; emotions: string[]; description?: string; details?: string; style?: PictureStyle };
 
-export function picturePrompt({ hints, me, mate, who, emotions, description, style = "watercolor" }: PictureInput): string {
+export function picturePrompt({ hints, me, mate, who, emotions, description, details, style = "watercolor" }: PictureInput): string {
   const st = STYLE[style];
   // 앞모습도 괜찮다. 사람 수를 앞에 두어야 모델이 빠뜨리지 않는다
   const who2 = RELATION[who] ? `, ${RELATION[who]}` : "";
@@ -89,8 +89,10 @@ export function picturePrompt({ hints, me, mate, who, emotions, description, sty
   return [
     `${st.medium} of ${subject}, ${SCENE[hints.scene]} in South Korea, ${SKY[hints.sky]}.`,
     description?.trim().replace(/([^.])$/, "$1."),
-    // 모델이 서양인 얼굴로 기울지 않게 따로 못박는다
-    n > 0 && `${n === 1 ? "The person is" : n === 2 ? "Both people are" : "All the people are"} Korean, with East Asian facial features, natural black or dark brown hair and everyday Korean clothing and styling.`,
+    // 참가자가 직접 적은 옷차림·머리 모양 등. 한국어 원문 그대로 넘기고, 기본 묘사보다 우선하게 한다
+    details && `MOST IMPORTANT — the participant described these details in Korean, follow them exactly: "${details.replace(/[.\s]+$/, "")}". Clothing (sleeve and pants length), hairstyle and hair length, colors and objects must match these words precisely, overriding anything else in this prompt.`,
+    // 모델이 서양인 얼굴로 기울지 않게 따로 못박는다. 적은 내용이 있으면 머리·옷은 그쪽을 따른다
+    n > 0 && `${n === 1 ? "The person is" : n === 2 ? "Both people are" : "All the people are"} Korean, with East Asian facial features${details ? "" : ", natural black or dark brown hair and everyday Korean clothing and styling"}.`,
     mood && `The moment feels ${mood}, and the light, colors and posture carry that feeling.`,
     st.finish,
     NO_MARKS,

@@ -142,7 +142,7 @@ export default function Experience() {
       const res = await fetch("/api/picture", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ hints, me: s.figures.me, mate: s.figures.mate, who: s.figures.who, emotions: emotionsForDiary.slice(0, 2), description, style: s.figures.style }),
+        body: JSON.stringify({ hints, me: s.figures.me, mate: s.figures.mate, who: s.figures.who, emotions: emotionsForDiary.slice(0, 2), description, details: s.figures.note.trim() || undefined, style: s.figures.style }),
         signal: AbortSignal.timeout(50_000),
       });
       const j = await res.json().catch(() => null);
@@ -1286,7 +1286,7 @@ function Privacy({ ai, picture }: { ai: boolean; picture: boolean }) {
         <p>· 적은 이름과 핵심감정 체크 결과는 코칭존 상담을 위해 저장되고, 정해진 기간 뒤 지워져요.</p>
         <p>· 마지막에 &lsquo;처음부터 다시하기&rsquo;를 누르면 모든 내용이 지워져요.</p>
         {ai && <p>· 그림 일기 문장을 만들 때 적은 기억과 감정이 AI 서비스(Anthropic)로 전송돼요. 이 앱은 따로 보관하지 않으며, 전송된 내용은 제공사의 정책에 따라 처리돼요.</p>}
-        {picture && <p>· 그림을 만들 때 장면·날씨·인물 모습(성별·나이대)을 영어 설명으로 바꿔 이미지 생성 서비스(OpenAI)로 보내요. 이 앱은 따로 보관하지 않아요.</p>}
+        {picture && <p>· 그림을 만들 때 장면·날씨·인물 모습(성별·나이대)과 "더 자세히"에 적은 내용을 이미지 생성 서비스(OpenAI)로 보내요. 이 앱은 따로 보관하지 않아요.</p>}
         <p>· 이 체험은 심리 검사나 진단이 아니에요.</p>
       </div>
     </details>
