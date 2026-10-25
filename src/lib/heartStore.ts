@@ -1,10 +1,12 @@
 import { randomInt } from "node:crypto";
 
 // 상담용 핵심감정 체크 결과 저장소 (서버 전용). Supabase REST를 fetch로 직접 부른다.
-// 저장하는 것: 이름, 4자리 상담 번호, 고른 문항 키, 시각. 기억·그림 일기는 저장하지 않는다.
+// 저장하는 것: 이름, 4자리 상담 번호, 고른 문항 키, 시각, 키링 이미지(PNG, 참가자가 키링을 저장할 때). 기억 글은 저장하지 않는다.
 // SUPABASE_* 가 없으면 개발 중에만 메모리에 둔다 (서버를 재시작하면 사라짐).
 
-export type HeartRow = { id: string; code: string; name: string; checks: string[]; created_at: string };
+// keyring_at: 키링 이미지가 들어온 시각. 이미지 자체는 무거워서 목록에 싣지 않고 getKeyring으로 따로 받는다
+export type HeartRow = { id: string; code: string; name: string; checks: string[]; created_at: string; keyring_at?: string | null };
+type MemRow = HeartRow & { keyring?: string };
 
 const url = process.env.SUPABASE_URL;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -12,7 +14,7 @@ const remote = Boolean(url && key);
 export const storeReady = () => remote || process.env.NODE_ENV !== "production";
 export const retentionDays = () => Number(process.env.HEART_RETENTION_DAYS) || 7;
 
-const mem = ((globalThis as { __heart?: HeartRow[] }).__heart ??= []);
+const mem = ((globalThis as { __heart?: MemRow[] }).__heart ??= []);
 
 async function rest(path: string, init: RequestInit = {}) {
   const res = await fetch(`${url}/rest/v1/heart_results${path}`, {
@@ -48,10 +50,28 @@ export async function listHeart(): Promise<HeartRow[]> {
   const cutoff = new Date(Date.now() - retentionDays() * 86_400_000).toISOString();
   if (!remote) {
     mem.splice(0, mem.length, ...mem.filter((r) => r.created_at >= cutoff));
-    return mem;
+    return mem.map(({ keyring: _, ...r }) => r); // eslint-disable-line @typescript-eslint/no-unused-vars
   }
   await rest(`?created_at=lt.${cutoff}`, { method: "DELETE" });
-  return rest("?select=id,code,name,checks,created_at&order=created_at.desc&limit=500");
+  return rest("?select=id,code,name,checks,created_at,keyring_at&order=created_at.desc&limit=500");
+}
+
+// 키링 PNG(base64)를 결과에 붙인다. 다시 저장하면 덮어쓴다. 해당 결과가 없으면 false
+export async function saveKeyring(id: string, base64: string): Promise<boolean> {
+  const keyring_at = new Date().toISOString();
+  if (!remote) {
+    const row = mem.find((r) => r.id === id);
+    if (row) Object.assign(row, { keyring: base64, keyring_at });
+    return Boolean(row);
+  }
+  const rows = await rest(`?id=eq.${encodeURIComponent(id)}&select=id`, { method: "PATCH", body: JSON.stringify({ keyring: base64, keyring_at }) });
+  return rows.length > 0;
+}
+
+export async function getKeyring(id: string): Promise<string | null> {
+  if (!remote) return mem.find((r) => r.id === id)?.keyring ?? null;
+  const [row] = await rest(`?id=eq.${encodeURIComponent(id)}&select=keyring`);
+  return row?.keyring ?? null;
 }
 
 export async function deleteHeart(id: string) {

@@ -121,6 +121,18 @@ function Sheet({ row, onDelete }: { row: HeartRow; onDelete: () => void }) {
           결과 지우기
         </button>
       </div>
+      {row.keyring_at && (
+        <figure className="mt-6 flex items-end gap-5">
+          {/* eslint-disable-next-line @next/next/no-img-element -- 참가자가 저장한 키링 PNG */}
+          <img src={`/api/coach/keyring?id=${row.id}`} alt={`${row.name}님의 키링 이미지`} className="w-40 border border-line" />
+          <figcaption className="flex flex-col gap-2">
+            <span className="text-sm text-mute">키링 이미지 · {new Date(row.keyring_at).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}</span>
+            <a className="btn-soft min-h-12 px-5 text-sm" href={`/api/coach/keyring?id=${row.id}`} download={`키링-${row.code}-${row.name}.png`}>
+              PNG 내려받기
+            </a>
+          </figcaption>
+        </figure>
+      )}
       <h2 className="mt-4 font-serif text-4xl font-bold">{top.map((x) => x.type.name).join(" · ")}</h2>
       <p className="mt-2 text-mute">체크 {row.checks.length}개 · 비율 = 고른 문항 / 그 유형 전체 문항</p>
 

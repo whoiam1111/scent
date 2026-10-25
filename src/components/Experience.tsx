@@ -28,6 +28,7 @@ type State = {
   suggestedEmotion: string | null;
   heartChecks: string[];
   heartCode: string | null;
+  heartId: string | null; // 키링 이미지를 결과에 붙일 때 쓰는 열쇠
   figures: Figures;
   diaryTitle: string;
   diaryText: string;
@@ -51,6 +52,7 @@ const initial: State = {
   suggestedEmotion: null,
   heartChecks: [],
   heartCode: null,
+  heartId: null,
   figures: { me: blankFigure, mate: blankFigure, who: "", note: "", style: "watercolor", count: "" },
   diaryTitle: "",
   diaryText: "",
@@ -142,7 +144,7 @@ export default function Experience() {
       const res = await fetch("/api/picture", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ hints, me: s.figures.me, mate: s.figures.mate, who: s.figures.who, emotions: emotionsForDiary.slice(0, 2), description, details: s.figures.note.trim() || undefined, style: s.figures.style }),
+        body: JSON.stringify({ hints, me: s.figures.me, mate: s.figures.mate, who: s.figures.who, emotions: emotionsForDiary.slice(0, 2), description, memory: s.memoryText.trim() || undefined, details: s.figures.note.trim() || undefined, style: s.figures.style }),
         signal: AbortSignal.timeout(50_000),
       });
       const j = await res.json().catch(() => null);
@@ -278,7 +280,7 @@ export default function Experience() {
   const [areaIdx, setAreaIdx] = useState(0); // heartPages 쪽 번호
   const page = heartPages[areaIdx];
   const toggleCheck = (key: string) =>
-    set({ heartChecks: s.heartChecks.includes(key) ? s.heartChecks.filter((k) => k !== key) : [...s.heartChecks, key], heartCode: null });
+    set({ heartChecks: s.heartChecks.includes(key) ? s.heartChecks.filter((k) => k !== key) : [...s.heartChecks, key], heartCode: null, heartId: null });
 
   const emotionReady = s.selectedEmotions.length > 0 && (!s.selectedEmotions.includes("기타") || s.customEmotion.trim().length > 0);
 
@@ -774,10 +776,10 @@ export default function Experience() {
             name={s.participantName.trim()}
             checks={s.heartChecks}
             code={s.heartCode}
-            onSaved={(heartCode) => set({ heartCode })}
+            onSaved={(heartCode, heartId) => set({ heartCode, heartId })}
             onBack={() => go("heartArea")}
             onRetry={() => {
-              set({ heartChecks: [], heartCode: null });
+              set({ heartChecks: [], heartCode: null, heartId: null });
               setAreaIdx(0);
               go("heartArea");
             }}
@@ -997,12 +999,23 @@ function Result({ s, emotions, onRedo, onRestart }: { s: State; emotions: string
     };
   }, [renderKey, transparent]);
 
-  const download = () => {
+  // 저장하면 코칭존에도 같은 PNG를 보낸다 (상담 번호가 있을 때). 다시 저장하면 마지막 것으로 바뀐다
+  const [sendState, setSendState] = useState<"" | "sending" | "sent" | "error">("");
+  const download = async () => {
     if (!png) return;
     const a = document.createElement("a");
     a.href = png.url;
     a.download = `마음의조각-${theme}-${new Date(s.createdAt ?? Date.now()).toISOString().slice(0, 10)}.png`;
     a.click();
+    if (!s.heartId) return;
+    setSendState("sending");
+    try {
+      const blob = await (await fetch(png.url)).blob();
+      const res = await fetch(`/api/heart/keyring?id=${s.heartId}`, { method: "POST", headers: { "Content-Type": "image/png" }, body: blob });
+      setSendState(res.ok ? "sent" : "error");
+    } catch {
+      setSendState("error");
+    }
   };
 
   const sentence = s.generationMode === "ai" ? "문장: AI 생성" : s.generationMode === "demo-fallback" ? "문장: 데모 (AI 생성 실패로 대체)" : "문장: 데모";
@@ -1054,6 +1067,11 @@ function Result({ s, emotions, onRedo, onRestart }: { s: State; emotions: string
           키링용 이미지 저장하기
         </button>
         <p className="text-center text-sm text-mute">그림 일기와 같은 모양 · 가로 1500px PNG · 저장이 안 되면 위 이미지를 길게 눌러 저장하세요.</p>
+        {sendState && (
+          <p role="status" className={`text-center text-base ${sendState === "error" ? "text-gold" : "text-ink"}`}>
+            {sendState === "sending" ? "코칭존으로 보내는 중…" : sendState === "sent" ? `코칭존으로 보냈어요 · 상담 번호 ${s.heartCode}` : "코칭존으로 보내지 못했어요. 다시 저장해 주세요."}
+          </p>
+        )}
         <button type="button" className="btn-soft w-full" onClick={onRedo}>
           그림 일기 다시 만들기
         </button>
@@ -1066,7 +1084,7 @@ function Result({ s, emotions, onRedo, onRestart }: { s: State; emotions: string
 }
 
 // 참가자에게는 핵심감정 이름 대신 향 조합만 보여준다. 결과지는 이름과 함께 코칭존 상담사에게 바로 간다.
-function ScentResult({ name, checks, code, onSaved, onBack, onRetry, onNext }: { name: string; checks: string[]; code: string | null; onSaved: (code: string) => void; onBack: () => void; onRetry: () => void; onNext: () => void }) {
+function ScentResult({ name, checks, code, onSaved, onBack, onRetry, onNext }: { name: string; checks: string[]; code: string | null; onSaved: (code: string, id: string) => void; onBack: () => void; onRetry: () => void; onNext: () => void }) {
   const top = scoreHeart(new Set(checks))[0];
   const scent = top.ratio > 0 ? SCENTS[top.type.name] : null;
   const [busy, setBusy] = useState(false);
@@ -1079,7 +1097,7 @@ function ScentResult({ name, checks, code, onSaved, onBack, onRetry, onNext }: {
       const res = await fetch("/api/heart", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, checks }) });
       const j = await res.json().catch(() => null);
       if (!res.ok || !j?.code) throw new Error(j?.error ?? "결과를 보내지 못했어요.");
-      onSaved(j.code);
+      onSaved(j.code, j.id);
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -1282,11 +1300,11 @@ function Privacy({ ai, picture }: { ai: boolean; picture: boolean }) {
     <details className="text-center text-base leading-relaxed text-mute">
       <summary className="btn-text cursor-pointer">개인정보와 이용 안내</summary>
       <div className="mt-2 bg-paper p-5 text-left">
-        <p>· 연락처는 묻지 않아요. 적은 기억과 그림 일기는 이 기기에도, 서버에도 저장되지 않아요.</p>
-        <p>· 적은 이름과 핵심감정 체크 결과는 코칭존 상담을 위해 저장되고, 정해진 기간 뒤 지워져요.</p>
+        <p>· 연락처는 묻지 않아요. 적은 기억 글은 이 기기에도, 서버에도 저장되지 않아요.</p>
+        <p>· 적은 이름, 핵심감정 체크 결과, 저장한 키링 이미지는 코칭존 상담과 키링 제작을 위해 저장되고, 정해진 기간 뒤 지워져요.</p>
         <p>· 마지막에 &lsquo;처음부터 다시하기&rsquo;를 누르면 모든 내용이 지워져요.</p>
         {ai && <p>· 그림 일기 문장을 만들 때 적은 기억과 감정이 AI 서비스(Anthropic)로 전송돼요. 이 앱은 따로 보관하지 않으며, 전송된 내용은 제공사의 정책에 따라 처리돼요.</p>}
-        {picture && <p>· 그림을 만들 때 장면·날씨·인물 모습(성별·나이대)과 "더 자세히"에 적은 내용을 이미지 생성 서비스(OpenAI)로 보내요. 이 앱은 따로 보관하지 않아요.</p>}
+        {picture && <p>· 그림을 만들 때 장면·날씨·인물 모습(성별·나이대), 기억 글과 &lsquo;더 자세히&rsquo;에 적은 내용을 이미지 생성 서비스(OpenAI)로 보내요. 이 앱은 따로 보관하지 않아요.</p>}
         <p>· 이 체험은 심리 검사나 진단이 아니에요.</p>
       </div>
     </details>

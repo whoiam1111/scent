@@ -28,7 +28,7 @@ const SCENE: Record<SceneHints["scene"], string> = {
   mountain: "on a Korean mountain trail among pine trees",
   city: "in a quiet residential alley with low-rise buildings and small neighborhood shops",
   home: "in a cozy Korean apartment room by a window",
-  food: "at a low table with a home-cooked Korean meal and side dishes",
+  food: "at a table with exactly the food named in the memory",
   flower: "on a Korean neighborhood path lined with blooming flowers",
   music: "in a cozy Korean room with music playing",
   travel: "by the window of a Korean train passing through the countryside",
@@ -67,9 +67,9 @@ export function personText(f: Figure): string {
   }
 }
 
-export type PictureInput = { hints: SceneHints; me: Figure; mate: Figure; who: string; emotions: string[]; description?: string; details?: string; style?: PictureStyle };
+export type PictureInput = { hints: SceneHints; me: Figure; mate: Figure; who: string; emotions: string[]; description?: string; memory?: string; details?: string; style?: PictureStyle };
 
-export function picturePrompt({ hints, me, mate, who, emotions, description, details, style = "watercolor" }: PictureInput): string {
+export function picturePrompt({ hints, me, mate, who, emotions, description, memory, details, style = "watercolor" }: PictureInput): string {
   const st = STYLE[style];
   // 앞모습도 괜찮다. 사람 수를 앞에 두어야 모델이 빠뜨리지 않는다
   const who2 = RELATION[who] ? `, ${RELATION[who]}` : "";
@@ -89,6 +89,8 @@ export function picturePrompt({ hints, me, mate, who, emotions, description, det
   return [
     `${st.medium} of ${subject}, ${SCENE[hints.scene]} in South Korea, ${SKY[hints.sky]}.`,
     description?.trim().replace(/([^.])$/, "$1."),
+    // 기억 원문: 음식·물건·행동을 비슷한 다른 것(막창 → 된장찌개)으로 바꾸지 않게
+    memory && `The picture shows this remembered moment, written by the participant in Korean: "${memory.replace(/[.\s]+$/, "")}". Show exactly the food, objects, place and activity named there, accurately and recognizably; never replace them with a different or more generic dish or object.`,
     // 참가자가 직접 적은 옷차림·머리 모양 등. 한국어 원문 그대로 넘기고, 기본 묘사보다 우선하게 한다
     details && `MOST IMPORTANT — the participant described these details in Korean, follow them exactly: "${details.replace(/[.\s]+$/, "")}". Clothing (sleeve and pants length), hairstyle and hair length, colors and objects must match these words precisely, overriding anything else in this prompt.`,
     // 모델이 서양인 얼굴로 기울지 않게 따로 못박는다. 적은 내용이 있으면 머리·옷은 그쪽을 따른다
@@ -99,5 +101,5 @@ export function picturePrompt({ hints, me, mate, who, emotions, description, det
   ]
     .filter(Boolean)
     .join(" ")
-    .slice(0, 2000);
+    .slice(0, 4000);
 }

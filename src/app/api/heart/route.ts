@@ -17,7 +17,8 @@ export async function POST(req: Request) {
   if (!parsed.success) return Response.json({ error: "이름과 체크한 내용을 다시 확인해 주세요." }, { status: 400 });
   try {
     const row = await saveHeart(parsed.data.name, [...new Set(parsed.data.checks)]);
-    return Response.json({ code: row.code });
+    // id는 키링 이미지를 붙일 때 쓰는 비밀 열쇠 (4자리 번호는 추측할 수 있어서 쓰지 않는다)
+    return Response.json({ code: row.code, id: row.id });
   } catch (e) {
     console.error("heart save failed", (e as Error).message);
     return Response.json({ error: "결과를 보내지 못했어요." }, { status: 502 });

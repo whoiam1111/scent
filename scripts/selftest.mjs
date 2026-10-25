@@ -70,6 +70,10 @@ assert.match(picturePrompt({ hints: { scene: "home", sky: "day", people: 1 }, me
 const dp = picturePrompt({ hints: { scene: "sea", sky: "day", people: 1 }, me: { gender: "female", age: "adult" }, mate: { gender: "none", age: "" }, who: "", emotions: [], details: "반팔 반바지, 숏컷" });
 assert.match(dp, /MOST IMPORTANT.*"반팔 반바지, 숏컷"/);
 assert.doesNotMatch(dp, /black or dark brown hair|everyday Korean clothing/);
+// 기억 원문의 음식이 그대로, 일반 집밥 문구는 없다
+const fp = picturePrompt({ hints: { scene: "food", sky: "night", people: 2 }, me: { gender: "none", age: "" }, mate: { gender: "none", age: "" }, who: "친구", emotions: [], memory: "친구랑 막창을 먹었다." });
+assert.match(fp, /"친구랑 막창을 먹었다".*never replace them/);
+assert.doesNotMatch(fp, /home-cooked|side dishes/);
 // 인원: 3~5명, 많으면 5명
 assert.equal(detectScene("친구 셋이서 바다에 갔다").people, 3);
 assert.equal(detectScene("가족들과 다 같이 밥을 먹었다").people, 5);

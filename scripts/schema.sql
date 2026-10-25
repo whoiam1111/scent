@@ -9,3 +9,6 @@ create table if not exists heart_results (
 alter table heart_results enable row level security;
 -- 이미 테이블을 만들었다면 이름 칸만 추가
 alter table heart_results add column if not exists name text not null default '';
+-- 키링 이미지 (PNG base64). 목록에는 keyring_at만 싣는다
+alter table heart_results add column if not exists keyring text;
+alter table heart_results add column if not exists keyring_at timestamptz;
