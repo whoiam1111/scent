@@ -48,6 +48,7 @@ assert.equal(scoreHeart(new Set())[0].ratio, 0);
 assert.equal(AREAS.length, 4);
 
 for (const h of heartTypes) for (const n of Object.values(SCENTS[h.name])) assert.ok(NOTES[n], `${h.name} → ${n}`); // 모든 핵심감정에 향, 모든 향에 설명
+assert.equal(Object.keys(NOTES).length, 12); // 현장 원액 12가지만
 
 for (const a of AREAS) assert.deepEqual(heartPages.filter((p) => p.area === a).flatMap((p) => p.items), areaItems(a)); // 쪽을 나눠도 빠지거나 겹치는 문항 없음
 assert.ok(heartPages.every((p) => p.items.length >= PAGE_SIZE && p.items.length < PAGE_SIZE * 2));
