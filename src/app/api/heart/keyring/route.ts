@@ -14,7 +14,7 @@ export async function POST(req: Request) {
   const buf = Buffer.from(await req.arrayBuffer());
   if (buf.length > MAX || !PNG.every((b, i) => buf[i] === b)) return Response.json({ error: "이미지를 확인해 주세요." }, { status: 400 });
   try {
-    if (!(await saveKeyring(id, buf.toString("base64")))) return Response.json({ error: "상담 결과를 찾지 못했어요." }, { status: 404 });
+    if (!(await saveKeyring(id, buf))) return Response.json({ error: "상담 결과를 찾지 못했어요." }, { status: 404 });
     return Response.json({ ok: true });
   } catch (e) {
     console.error("keyring save failed", (e as Error).message);
