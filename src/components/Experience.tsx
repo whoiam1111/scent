@@ -1069,7 +1069,7 @@ function Result({ s, emotions, onRedo, onRestart }: { s: State; emotions: string
         <p className="text-center text-sm text-mute">그림 일기와 같은 모양 · 가로 1500px PNG · 저장이 안 되면 위 이미지를 길게 눌러 저장하세요.</p>
         {sendState && (
           <p role="status" className={`text-center text-base ${sendState === "error" ? "text-gold" : "text-ink"}`}>
-            {sendState === "sending" ? "코칭존으로 보내는 중…" : sendState === "sent" ? `코칭존으로 보냈어요 · 상담 번호 ${s.heartCode}` : "코칭존으로 보내지 못했어요. 다시 저장해 주세요."}
+            {sendState === "sending" ? "코칭존으로 보내는 중…" : sendState === "sent" ? "코칭존으로 보냈어요" : "코칭존으로 보내지 못했어요. 다시 저장해 주세요."}
           </p>
         )}
         <button type="button" className="btn-soft w-full" onClick={onRedo}>
@@ -1159,8 +1159,7 @@ function ScentResult({ name, checks, code, onSaved, onBack, onRetry, onNext }: {
               {code ? (
                 <>
                   <p className="text-xl">{name}님, 체험을 마치면 코칭존으로 와 주세요.</p>
-                  <p className="mt-2 text-lg text-mute">상담사에게 이름과 이 번호를 알려 주세요.</p>
-                  <p className="disp-en mt-3 text-7xl tracking-[0.12em]">{code}</p>
+                  <p className="mt-2 text-lg text-mute">상담사에게 이름을 알려 주세요.</p>
                 </>
               ) : err ? (
                 <>

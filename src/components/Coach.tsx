@@ -5,8 +5,7 @@ import { AREAS, scoreHeart, type HeartScore } from "@/lib/heart";
 import type { HeartRow } from "@/lib/heartStore";
 import { SCENTS } from "@/lib/scent";
 
-// 코칭존 상담사 화면: 참가자가 알려 준 상담 번호로 결과지를 찾는다.
-// 넓은 화면은 왼쪽 목록·오른쪽 결과지, 좁은 화면은 목록 → 결과지로 넘어간다.
+// 코칭존 상담사 화면: 참가자가 알려 준 이름으로 찾는다. 목록에서 누르면 결과지로 넘어가고 '목록'으로 돌아온다.
 
 type Filter = "all" | "keyring";
 const time = (iso: string) => new Date(iso).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
@@ -45,14 +44,14 @@ export default function Coach() {
   }, [load]);
 
   const remove = async (r: HeartRow) => {
-    if (!confirm(`상담 번호 ${r.code} (${r.name}) 결과와 키링 이미지를 지울까요? 되돌릴 수 없어요.`)) return;
+    if (!confirm(`${r.name}님의 결과와 키링 이미지를 지울까요? 되돌릴 수 없어요.`)) return;
     await fetch(`/api/coach?id=${r.id}`, { method: "DELETE" });
     setOpenId(null);
     load();
   };
 
   const term = q.trim();
-  const shown = rows.filter((r) => (filter === "all" || r.keyring_at) && (r.code.includes(term) || r.name.includes(term)));
+  const shown = rows.filter((r) => (filter === "all" || r.keyring_at) && r.name.includes(term));
   const open = rows.find((r) => r.id === openId) ?? null;
 
   // 요약 숫자
@@ -87,6 +86,10 @@ export default function Coach() {
       <div className="mx-auto max-w-7xl px-5 py-6 sm:px-8">
         {error && <p className="mb-4 border-l-2 border-gold py-1 pl-4 text-gold print:hidden">{error} · 15초 뒤 다시 시도해요.</p>}
 
+        {open ? (
+          <Sheet row={open} onBack={() => setOpenId(null)} onDelete={() => remove(open)} />
+        ) : (
+          <>
         <dl className="grid grid-cols-2 border border-line bg-paper sm:grid-cols-4 print:hidden">
           <Stat label="오늘 참여" value={todayCount} unit="명" />
           <Stat label="보관 중" value={rows.length} unit="명" />
@@ -94,14 +97,13 @@ export default function Coach() {
           <Stat label="가장 많은 핵심감정" text={common ? `${common[0]} · ${common[1]}명` : "-"} />
         </dl>
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-[22rem_1fr]">
-          {/* 목록: 좁은 화면에서는 결과지를 열면 숨긴다 */}
-          <section aria-label="참가자 목록" className={`${open ? "hidden lg:block" : ""} print:hidden`}>
+        <section aria-label="참가자 목록" className="mt-6">
+          <div className="flex flex-wrap items-center gap-3">
             <label htmlFor="q" className="sr-only">
-              이름 또는 상담 번호로 찾기
+              이름으로 찾기
             </label>
-            <input id="q" maxLength={20} value={q} onChange={(e) => setQ(e.target.value)} placeholder="이름 또는 상담 번호" className="field !py-3 !text-lg" inputMode="search" autoComplete="off" />
-            <div role="radiogroup" aria-label="보기" className="mt-3 grid grid-cols-2 border border-line">
+            <input id="q" maxLength={20} value={q} onChange={(e) => setQ(e.target.value)} placeholder="이름으로 찾기" className="field max-w-sm !py-3 !text-lg" inputMode="search" autoComplete="off" />
+            <div role="radiogroup" aria-label="보기" className="grid w-72 grid-cols-2 border border-line">
               {(
                 [
                   ["all", `전체 ${rows.length}`],
@@ -114,26 +116,23 @@ export default function Coach() {
               ))}
             </div>
 
-            <ul className="mt-3 max-h-[calc(100dvh-20rem)] overflow-y-auto border-t border-line">
+          </div>
+            <ul className="mt-4 border-t border-line">
               {shown.map((r) => {
                 const top = topOf(scoreHeart(new Set(r.checks)));
-                const active = r.id === openId;
                 return (
                   <li key={r.id}>
                     <button
                       type="button"
                       onClick={() => setOpenId(r.id)}
-                      aria-current={active || undefined}
-                      className={`grid w-full grid-cols-[4.2rem_1fr_auto] items-center gap-x-3 border-b border-line px-3 py-3 text-left transition-colors ${active ? "bg-ink text-ivory" : "bg-paper hover:bg-cream/60"}`}
+                      className="grid w-full grid-cols-[minmax(6rem,12rem)_1fr_auto_auto] items-center gap-x-5 border-b border-line bg-paper px-5 py-4 text-left transition-colors hover:bg-cream/60 max-sm:grid-cols-[1fr_auto]"
                     >
-                      <span className="disp-en text-3xl leading-none tabular-nums">{r.code}</span>
-                      <span className="min-w-0">
-                        <span className="block truncate font-bold">{r.name}</span>
-                        <span className={`block truncate text-sm ${active ? "text-ivory/70" : "text-mute"}`}>{top.map((x) => x.type.name).join(" · ") || "체크 없음"}</span>
-                      </span>
-                      <span className="flex flex-col items-end gap-1">
-                        <span className={`font-label text-xs tabular-nums ${active ? "text-ivory/70" : "text-mute"}`}>{time(r.created_at)}</span>
-                        {r.keyring_at && <span className={`px-1.5 font-label text-[0.65rem] tracking-[0.12em] uppercase ${active ? "bg-ivory/15" : "bg-apricot text-gold"}`}>키링</span>}
+                      <span className="truncate text-lg font-bold">{r.name}</span>
+                      <span className="truncate text-mute max-sm:col-span-2 max-sm:row-start-2">{top.map((x) => x.type.name).join(" · ") || "체크 없음"}</span>
+                      <span className={`px-2 font-label text-xs tracking-[0.08em] max-sm:hidden ${r.keyring_at ? "bg-apricot text-gold" : "invisible"}`}>키링</span>
+                      <span className="flex items-center gap-3 font-label text-sm text-mute tabular-nums">
+                        {time(r.created_at)}
+                        <span aria-hidden>›</span>
                       </span>
                     </button>
                   </li>
@@ -141,19 +140,9 @@ export default function Coach() {
               })}
             </ul>
             {shown.length === 0 && <p className="py-10 text-center text-mute">{rows.length ? "찾는 결과가 없어요." : "아직 들어온 결과가 없어요."}</p>}
-          </section>
-
-          <section aria-label="결과지" className={open ? "" : "hidden lg:block"}>
-            {open ? (
-              <Sheet row={open} onBack={() => setOpenId(null)} onDelete={() => remove(open)} />
-            ) : (
-              <div className="flex h-full min-h-80 flex-col items-center justify-center border border-dashed border-line text-center text-mute">
-                <p className="label">No. ____</p>
-                <p className="mt-3 text-lg">참가자가 알려 준 상담 번호를 왼쪽에서 찾아 주세요.</p>
-              </div>
-            )}
-          </section>
-        </div>
+        </section>
+          </>
+        )}
       </div>
     </div>
   );
@@ -187,12 +176,10 @@ function Sheet({ row, onBack, onDelete }: { row: HeartRow; onBack: () => void; o
     <article className="border border-line bg-paper print:border-0">
       {/* 결과지 머리: 번호·이름·시각과 할 일 */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-6 py-4 print:px-0">
-        <button type="button" onClick={onBack} className="btn-text -ml-2 lg:hidden print:hidden">
+        <button type="button" onClick={onBack} className="btn-text -ml-2 print:hidden">
           ← 목록
         </button>
-        <p className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-          <span className={LABEL}>상담 번호</span>
-          <span className="disp-en text-4xl leading-none tabular-nums">{row.code}</span>
+        <p className="mr-auto flex flex-wrap items-baseline gap-x-4 gap-y-1">
           <span className="text-2xl font-bold">{row.name}</span>
           <span className="font-label text-sm text-mute">{new Date(row.created_at).toLocaleString("ko-KR")}</span>
         </p>
@@ -275,7 +262,7 @@ function Sheet({ row, onBack, onDelete }: { row: HeartRow; onBack: () => void; o
               {/* eslint-disable-next-line @next/next/no-img-element -- 참가자가 저장한 키링 PNG */}
               <img src={img} alt={`${row.name}님의 키링 이미지`} className="mt-3 w-full border border-line" />
               <p className="mt-2 font-label text-xs text-mute">저장 {time(row.keyring_at)}</p>
-              <a className="btn-main mt-3 min-h-12 w-full px-4 text-sm" href={img} download={`키링-${row.code}-${row.name}.png`}>
+              <a className="btn-main mt-3 min-h-12 w-full px-4 text-sm" href={img} download={`키링-${row.name}-${time(row.created_at).replace(/\D/g, "")}.png`}>
                 PNG 내려받기
               </a>
             </>
