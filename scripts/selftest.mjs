@@ -64,7 +64,7 @@ assert.ok(pp.length < 2000);
 assert.match(pp, /watercolor/);
 assert.match(pp, /Both people are Korean, with East Asian facial features/);
 assert.doesNotMatch(pp, /behind|not visible/);
-assert.match(picturePrompt({ hints: { scene: "sea", sky: "day", people: 1 }, me: { gender: "none", age: "" }, mate: { gender: "none", age: "" }, who: "", emotions: [], style: "photo" }), /A realistic candid photograph of a Korean person with a natural expression.*The person is Korean.*not an illustration/);
+assert.match(picturePrompt({ hints: { scene: "sea", sky: "day", people: 1 }, me: { gender: "none", age: "" }, mate: { gender: "none", age: "" }, who: "", emotions: [], style: "illustration" }), /^A warm digital illustration.*a Korean person with a natural expression.*The person is Korean.*not a photograph/);
 assert.match(picturePrompt({ hints: { scene: "home", sky: "day", people: 1 }, me: { gender: "male", age: "child" }, mate: { gender: "none", age: "" }, who: "", emotions: [], style: "cartoon" }), /^A cute 3D animated still.*a little Korean boy.*Original characters only/);
 // 직접 적은 옷차림·머리는 원문 그대로 가장 중요한 지시로, 기본 옷·머리 문구는 빠진다
 const dp = picturePrompt({ hints: { scene: "sea", sky: "day", people: 1 }, me: { gender: "female", age: "adult" }, mate: { gender: "none", age: "" }, who: "", emotions: [], details: "반팔 반바지, 숏컷" });

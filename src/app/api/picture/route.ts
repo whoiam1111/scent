@@ -25,7 +25,7 @@ const Body = z.object({
   description: z.string().max(400).optional(),
   memory: z.string().trim().max(1000).optional(), // 참가자가 쓴 기억 원문 (한국어)
   details: z.string().trim().max(300).optional(), // 참가자가 직접 적은 옷차림·머리 모양 (한국어)
-  style: z.enum(["watercolor", "photo", "cartoon"]).optional(),
+  style: z.enum(["watercolor", "illustration", "cartoon"]).optional(),
 });
 
 export async function POST(req: Request) {

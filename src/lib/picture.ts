@@ -10,9 +10,10 @@ const STYLE: Record<PictureStyle, { medium: string; finish: string }> = {
     medium: "A delicate watercolor painting",
     finish: "Painted with soft wet-on-wet washes and gentle bleeding edges in a calm, simple composition, luminous natural light, the paint reaching every edge of the picture.",
   },
-  photo: {
-    medium: "A realistic candid photograph",
-    finish: "It looks like a real photo, not an illustration or 3D render: shot on 35mm film with natural light, shallow depth of field, true-to-life skin tones and colors, subtle film grain, documentary style.",
+  // 그림책 같은 디지털 일러스트. 실사처럼 보이지 않게
+  illustration: {
+    medium: "A warm digital illustration in the style of a Korean picture book",
+    finish: "Drawn with clean soft lines, flat gentle colors with subtle texture, simplified friendly faces, cozy storybook atmosphere, clearly an illustration and not a photograph.",
   },
   // 한국 아동 3D 애니메이션(뽀로로 같은) 느낌. 캐릭터 이름은 넣지 않는다: 저작권 캐릭터를 그대로 그리거나 거절될 수 있다
   cartoon: {

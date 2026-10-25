@@ -3,7 +3,7 @@ export type Gender = "none" | "female" | "male";
 export type Age = "" | "child" | "teen" | "adult" | "middle" | "senior";
 export type Figure = { gender: Gender; age: Age };
 // who: 함께한 사람 ("" = 아직 안 고름, "없음" = 나 혼자). note: 그림에 더 담고 싶은 것 (옷차림, 날씨, 물건 등). style: 생성형 그림의 화풍
-export type PictureStyle = "watercolor" | "photo" | "cartoon";
+export type PictureStyle = "watercolor" | "illustration" | "cartoon";
 // count: 그림 속 인원 ("" = 글에서 판단, "5" = 5명 이상)
 export type Figures = { me: Figure; mate: Figure; who: string; note: string; style: PictureStyle; count: "" | "2" | "3" | "4" | "5" };
 export const COUNTS: ["2" | "3" | "4" | "5", string][] = [
@@ -14,8 +14,8 @@ export const COUNTS: ["2" | "3" | "4" | "5", string][] = [
 ];
 export const PICTURE_STYLES: [PictureStyle, string][] = [
   ["watercolor", "수채화"],
-  ["photo", "실사"],
-  ["cartoon", "애니메이션"],
+  ["illustration", "일러스트"],
+  ["cartoon", "캐릭터"],
 ];
 
 export const GENDERS: [Gender, string][] = [
