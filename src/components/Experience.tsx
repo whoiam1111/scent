@@ -82,7 +82,11 @@ type State = {
     createdAt: string | null;
     generationMode: GenerationMode | null;
     pictureAi: boolean; // 그림을 생성형 AI로 만들었는지 (아니면 템플릿)
+    pictureCount: number; // 이 참가자가 만든 AI 그림 수 (비용 때문에 MAX_PICTURES까지)
 };
+
+// AI 그림은 한 사람에 1장 (그림 한 장마다 이미지 생성 요금이 든다). 다시 만들기 버튼은 없고, 화면을 거꾸로 돌아가도 이 수를 넘으면 템플릿 그림. '처음부터 다시하기'로 새 참가자가 되면 0부터
+const MAX_PICTURES = 1;
 
 const initial: State = {
     mode: 'memory',
@@ -106,6 +110,7 @@ const initial: State = {
     createdAt: null,
     generationMode: null,
     pictureAi: false,
+    pictureCount: 0,
 };
 
 const TIMEOUT_MS = 30_000;
@@ -188,13 +193,14 @@ export default function Experience() {
                           s.figures.who ? 2 : 0,
                       ) as SceneHints['people']),
         };
-        const picture = pictureEnabled ? await makePicture(hints, description) : null;
+        const picture = pictureEnabled && s.pictureCount < MAX_PICTURES ? await makePicture(hints, description) : null;
         if (genRef.current !== id) return;
         set({
             diaryTitle: title,
             diaryText: text,
             illustration: picture ?? buildIllustration(s.memoryText || title, emotionsForDiary, hints, s.figures),
             pictureAi: Boolean(picture),
+            pictureCount: s.pictureCount + (picture ? 1 : 0),
             createdAt: new Date().toISOString(),
             generationMode: mode,
         });
@@ -1163,7 +1169,6 @@ export default function Experience() {
                         <Result
                             s={s}
                             emotions={emotionsForDiary}
-                            onRedo={() => go(s.mode === 'today' && !s.memoryText ? 'emotion' : 'write')}
                             onRestart={() => setConfirmReset(true)}
                         />
                     )}
@@ -1433,12 +1438,10 @@ function Generating({ onCancel }: { onCancel: () => void }) {
 function Result({
     s,
     emotions,
-    onRedo,
     onRestart,
 }: {
     s: State;
     emotions: string[];
-    onRedo: () => void;
     onRestart: () => void;
 }) {
     const [transparent, setTransparent] = useState(false);
@@ -1660,9 +1663,6 @@ function Result({
                         )}
                     </p>
                 )}
-                <button type="button" className="btn-soft w-full" onClick={onRedo}>
-                    그림 일기 다시 만들기
-                </button>
                 <button type="button" className="btn-text self-center" onClick={onRestart}>
                     처음부터 다시하기
                 </button>
