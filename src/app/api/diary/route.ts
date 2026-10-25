@@ -23,7 +23,7 @@ const Output = z.object({
   text: z.string(),
   scene: z.enum(["sea", "mountain", "city", "home", "food", "flower", "music", "travel", "field"]),
   sky: z.enum(["day", "sunset", "night", "rain", "snow"]),
-  people: z.union([z.literal(0), z.literal(1), z.literal(2)]),
+  people: z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
   picture: z.string(),
 });
 
@@ -36,6 +36,7 @@ const SYSTEM = `당신은 오프라인 팝업 '마음의 조각'에서 참가자
 - title은 14자 이내의 짧고 시적인 제목.
 - 감정을 진단하거나 평가하지 말고, 조언이나 위로의 말도 덧붙이지 마세요.
 - scene, sky, people은 그림을 그리기 위한 단서입니다. 기억에 드러난 것만 고르고, 드러나지 않으면 scene은 field, sky는 day, people은 0으로 두세요.
+  people은 나를 포함한 사람 수(0~5)입니다. 다섯 명 이상이거나 "여럿", "친구들", "가족들"처럼 많으면 5로 두세요.
 - picture는 이미지 생성 모델에 줄 영어 묘사 1~2문장(45단어 이내)입니다. 한국에서 열리는 팝업이라 배경은 한국입니다.
   <memory>와 <details>에 나온 것만, 사진을 보듯 구체적으로 쓰세요: 사람들이 무엇을 하고 있는지(동작), 구체적인 장소와 주변 물건, 옷차림, 시간대·날씨·빛.
   없는 사실은 지어내지 말고, 이름·얼굴 묘사·글자·간판 문구는 넣지 마세요. 사람의 성별·나이·인원은 따로 정하니 쓰지 마세요.`;

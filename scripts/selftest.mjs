@@ -66,6 +66,13 @@ assert.match(pp, /Both people are Korean, with East Asian facial features/);
 assert.doesNotMatch(pp, /behind|not visible/);
 assert.match(picturePrompt({ hints: { scene: "sea", sky: "day", people: 1 }, me: { gender: "none", age: "" }, mate: { gender: "none", age: "" }, who: "", emotions: [], style: "photo" }), /A realistic candid photograph of a Korean person with a natural expression.*The person is Korean.*not an illustration/);
 assert.match(picturePrompt({ hints: { scene: "home", sky: "day", people: 1 }, me: { gender: "male", age: "child" }, mate: { gender: "none", age: "" }, who: "", emotions: [], style: "cartoon" }), /^A cute 3D animated still.*a little Korean boy.*Original characters only/);
+// 인원: 3~5명, 많으면 5명
+assert.equal(detectScene("친구 셋이서 바다에 갔다").people, 3);
+assert.equal(detectScene("가족들과 다 같이 밥을 먹었다").people, 5);
+assert.equal(detectScene("엄마와 산책").people, 2);
+const four = picturePrompt({ hints: { scene: "city", sky: "day", people: 4 }, me: { gender: "female", age: "adult" }, mate: { gender: "female", age: "adult" }, who: "친구", emotions: [] });
+assert.match(four, /exactly four people, .* and two more Korean people.*All the people are Korean/);
+assert.match(picturePrompt({ hints: { scene: "city", sky: "day", people: 5 }, me: { gender: "none", age: "" }, mate: { gender: "none", age: "" }, who: "", emotions: [] }), /a lively group of five Korean people/);
 assert.doesNotMatch(picturePrompt({ hints: { scene: "field", sky: "day", people: 0 }, me: { gender: "none", age: "" }, mate: { gender: "none", age: "" }, who: "", emotions: ["기타"] }), /undefined|Korean, with/);
 
 console.log("selftest ok");

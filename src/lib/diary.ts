@@ -58,12 +58,20 @@ const SKY_WORDS: [Sky, string[]][] = [
 
 const PEOPLE_WORDS = ["친구", "가족", "엄마", "아빠", "할머니", "할아버지", "언니", "오빠", "누나", "형", "동생", "연인", "애인", "우리", "함께", "같이", "둘이"];
 
-export type SceneHints = { scene: Scene; sky: Sky; people: 0 | 1 | 2 };
+// people: 그림 속 사람 수(나 포함). 5는 "다섯 명 이상·여럿"을 뜻한다
+export type SceneHints = { scene: Scene; sky: Sky; people: 0 | 1 | 2 | 3 | 4 | 5 };
+
+const COUNT_WORDS: [3 | 4 | 5, string[]][] = [
+  [5, ["다섯", "5명", "여섯", "6명", "일곱", "여덟", "여럿", "여러 명", "다 같이", "다같이", "모두 함께", "친구들", "가족들", "동료들", "단체"]],
+  [4, ["넷이", "네 명", "네명", "4명", "넷이서"]],
+  [3, ["셋이", "세 명", "세명", "3명", "셋이서"]],
+];
 
 export function detectScene(text: string): SceneHints {
   const scene = SCENE_WORDS.find(([, ws]) => ws.some((w) => text.includes(w)))?.[0] ?? "field";
   const sky = SKY_WORDS.find(([, ws]) => ws.some((w) => text.includes(w)))?.[0] ?? "day";
-  const people = PEOPLE_WORDS.some((w) => text.includes(w)) ? 2 : text.includes("혼자") || text.includes("나는") || text.includes("내가") ? 1 : 0;
+  const many = COUNT_WORDS.find(([, ws]) => ws.some((w) => text.includes(w)))?.[0];
+  const people = many ?? (PEOPLE_WORDS.some((w) => text.includes(w)) ? 2 : text.includes("혼자") || text.includes("나는") || text.includes("내가") ? 1 : 0);
   return { scene, sky, people };
 }
 

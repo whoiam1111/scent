@@ -73,18 +73,24 @@ export function picturePrompt({ hints, me, mate, who, emotions, description, sty
   const st = STYLE[style];
   // 앞모습도 괜찮다. 사람 수를 앞에 두어야 모델이 빠뜨리지 않는다
   const who2 = RELATION[who] ? `, ${RELATION[who]}` : "";
+  const n = Math.min(hints.people, 5);
+  const pair = `${personText(me)} and ${personText(mate)}${who2}`;
   const subject =
-    hints.people === 0
+    n === 0
       ? "a quiet scene with no people"
-      : hints.people === 1
+      : n === 1
         ? `${personText(me)} with a natural expression`
-        : `exactly two people, ${personText(me)} and ${personText(mate)}${who2}, together with natural expressions`;
+        : n === 2
+          ? `exactly two people, ${pair}, together with natural expressions`
+          : n === 5
+            ? `a lively group of five Korean people, including ${pair}, gathered together with natural expressions, every person clearly visible`
+            : `exactly ${n === 3 ? "three" : "four"} people, ${pair} and ${n === 3 ? "one more Korean person" : "two more Korean people"}, together with natural expressions`;
   const mood = emotions.map((e) => MOOD[e]).filter(Boolean).join(" and ");
   return [
     `${st.medium} of ${subject}, ${SCENE[hints.scene]} in South Korea, ${SKY[hints.sky]}.`,
     description?.trim().replace(/([^.])$/, "$1."),
     // 모델이 서양인 얼굴로 기울지 않게 따로 못박는다
-    hints.people > 0 && `${hints.people === 1 ? "The person is" : "Both people are"} Korean, with East Asian facial features, natural black or dark brown hair and everyday Korean clothing and styling.`,
+    n > 0 && `${n === 1 ? "The person is" : n === 2 ? "Both people are" : "All the people are"} Korean, with East Asian facial features, natural black or dark brown hair and everyday Korean clothing and styling.`,
     mood && `The moment feels ${mood}, and the light, colors and posture carry that feeling.`,
     st.finish,
     NO_MARKS,

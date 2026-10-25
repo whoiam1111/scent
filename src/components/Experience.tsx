@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { categories, nextStep, summarize, WHO, whenOptions, type Answers, type Category, type StepId } from "@/lib/explore";
 import { demoDiary, detectScene, EMOTIONS, type SceneHints } from "@/lib/diary";
 import { buildIllustration } from "@/lib/illustration";
-import { AGES, blankFigure, figureFor, GENDERS, guessMate, PICTURE_STYLES, type Figure, type Figures } from "@/lib/figures";
+import { AGES, blankFigure, COUNTS, figureFor, GENDERS, guessMate, PICTURE_STYLES, type Figure, type Figures } from "@/lib/figures";
 import { cardToPng } from "@/lib/cardImage";
 import DiaryCard, { ACCENTS, ALIGNS, BGS, FONTS, INKS, THEMES, type DiaryAlign, type DiaryBg, type DiaryFont, type Theme } from "@/components/DiaryCard";
 import { AREAS, areaItems, heartPages, itemKey, scoreHeart } from "@/lib/heart";
@@ -51,7 +51,7 @@ const initial: State = {
   suggestedEmotion: null,
   heartChecks: [],
   heartCode: null,
-  figures: { me: blankFigure, mate: blankFigure, who: "", note: "", style: "watercolor" },
+  figures: { me: blankFigure, mate: blankFigure, who: "", note: "", style: "watercolor", count: "" },
   diaryTitle: "",
   diaryText: "",
   illustration: "",
@@ -120,8 +120,8 @@ export default function Experience() {
     const hints: SceneHints = {
       scene: extra.scene !== "field" ? extra.scene : base.scene,
       sky: extra.sky !== "day" ? extra.sky : base.sky,
-      // 그림 속 인물 화면에서 고른 것이 글보다 우선
-      people: s.figures.who === "없음" ? 1 : s.figures.who ? 2 : (Math.max(base.people, extra.people) as SceneHints["people"]),
+      // 그림 속 인물 화면에서 고른 것이 글보다 우선. 인원을 고르지 않았으면 글·AI가 읽은 수를 쓰되, 함께한 사람이 있으면 최소 2명
+      people: s.figures.who === "없음" ? 1 : (Math.max(Number(s.figures.count) || Math.max(base.people, extra.people), s.figures.who ? 2 : 0) as SceneHints["people"]),
     };
     const picture = pictureEnabled ? await makePicture(hints, description) : null;
     if (genRef.current !== id) return;
@@ -207,7 +207,9 @@ export default function Experience() {
     // 직접 적기에서 고른 사람이 있으면 그것을 먼저 쓴다
     const picked = s.memoryExplorationAnswers.who;
     const who = picked ? (picked === "혼자" ? "없음" : picked) : (guessMate(s.memoryText)?.word ?? (detectScene(s.memoryText).people === 1 ? "없음" : ""));
-    if (!s.figures.who) set({ figures: { ...s.figures, who, mate: figureFor(who) } });
+    // 글에 "셋이", "친구들" 같은 말이 있으면 인원도 미리 고른다
+    const n = detectScene(s.memoryText).people;
+    if (!s.figures.who) set({ figures: { ...s.figures, who, mate: figureFor(who), count: s.figures.count || (n >= 3 ? (String(n) as Figures["count"]) : "") } });
     go("figures");
   };
   const pickWho = (who: string) => set({ figures: { ...s.figures, who, mate: figureFor(who) } });
@@ -642,7 +644,7 @@ export default function Experience() {
               <>
                 <BackButton onClick={() => go("emotion")} />
                 <h1 className="mt-4 display text-[clamp(2rem,4.4vw,3.2rem)]">그림 속 인물을 정해 주세요.</h1>
-                <p className="mt-5 text-xl leading-relaxed text-mute">그림 일기의 사람 모습에 반영돼요. 정하지 않으면 중성적인 뒷모습으로 그려요.</p>
+                <p className="mt-5 text-xl leading-relaxed text-mute">그림 일기의 사람 모습에 반영돼요. 정하지 않으면 중성적인 모습으로 그려요.</p>
                 <Note>그림을 그리는 데만 쓰고 저장하지 않아요.</Note>
               </>
             }
@@ -667,6 +669,7 @@ export default function Experience() {
                     <>
                       <Segmented label={`${s.figures.who}의 모습`} options={GENDERS} value={s.figures.mate.gender} onChange={(gender) => setFigure("mate", { gender })} cols={3} />
                       <Segmented label={`${s.figures.who}의 나이대`} options={AGES} value={s.figures.mate.age} onChange={(age) => setFigure("mate", { age })} cols={3} />
+                      <Segmented label="그림 속 인원 (나 포함)" options={COUNTS} value={s.figures.count} onChange={(count) => set({ figures: { ...s.figures, count } })} cols={4} />
                     </>
                   )}
                 </fieldset>

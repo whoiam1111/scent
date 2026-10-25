@@ -136,6 +136,12 @@ export function buildIllustration(memory: string, emotions: string[], hints: Sce
     const px = 420 + (r() - 0.5) * 160;
     parts.push(person(px, py, 1.3, pal.accent, figures?.me), person(px + 130, py, 1.2, accent2 === pal.accent ? "#9aad8b" : accent2, figures?.mate));
   }
+  if (people >= 3) {
+    // 가운데 정렬로 나란히, 5명이면 화면을 거의 채운다
+    const gap = 150, x0 = 500 - ((people - 1) * gap) / 2;
+    const colors = [pal.accent, accent2 === pal.accent ? "#9aad8b" : accent2, "#c9a27e", "#8fa3b8", "#b48a9a"];
+    for (let i = 0; i < people; i++) parts.push(person(x0 + i * gap, py, i < 2 ? 1.2 : 1.1, colors[i], i === 0 ? figures?.me : i === 1 ? figures?.mate : undefined));
+  }
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" width="1000" height="1000">
 <defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${skyTop}"/><stop offset="1" stop-color="${skyBottom}"/></linearGradient>

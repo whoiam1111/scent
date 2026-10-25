@@ -16,7 +16,7 @@ const Body = z.object({
   hints: z.object({
     scene: z.enum(["sea", "mountain", "city", "home", "food", "flower", "music", "travel", "field"]),
     sky: z.enum(["day", "sunset", "night", "rain", "snow"]),
-    people: z.union([z.literal(0), z.literal(1), z.literal(2)]),
+    people: z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
   }),
   me: Figure,
   mate: Figure,
