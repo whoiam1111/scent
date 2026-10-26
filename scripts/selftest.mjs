@@ -6,6 +6,7 @@ import { AREAS, areaItems, heartPages, heartTypes, itemKey, PAGE_SIZE, scoreHear
 import { NOTES, SCENTS } from "../src/lib/scent.ts";
 import { guessMate } from "../src/lib/figures.ts";
 import { picturePrompt } from "../src/lib/picture.ts";
+import { covers } from "../src/lib/cardImage.ts";
 
 const people = categories.find((c) => c.id === "people");
 assert.equal(nextStep(people, "start", { start: "친구와 함께했던 시간" }), "scene");
@@ -84,4 +85,11 @@ assert.match(four, /exactly four people, .* and two more Korean people.*All the 
 assert.match(picturePrompt({ hints: { scene: "city", sky: "day", people: 5 }, me: { gender: "none", age: "" }, mate: { gender: "none", age: "" }, who: "", emotions: [] }), /a lively group of five Korean people/);
 assert.doesNotMatch(picturePrompt({ hints: { scene: "field", sky: "day", people: 0 }, me: { gender: "none", age: "" }, mate: { gender: "none", age: "" }, who: "", emotions: ["기타"] }), /undefined|Korean, with/);
 
+// 키링 PNG 글꼴: 카드 글자가 들어 있는 조각만 고른다
+const cp = (t) => [...t].map((c) => c.codePointAt(0));
+assert.ok(covers("", cp("가"))); // 범위 없음 = 모든 글자
+assert.ok(covers("U+AC00-D7A3", cp("마음")));
+assert.ok(!covers("U+0000-00FF, U+0131", cp("마음")));
+assert.ok(covers("u+4??", cp("ѐ"))); // U+0450, 와일드카드
+assert.ok(!covers("U+4??", cp("a")));
 console.log("selftest ok");
