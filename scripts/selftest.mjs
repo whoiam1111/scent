@@ -6,7 +6,7 @@ import { AREAS, areaItems, heartPages, heartTypes, itemKey, PAGE_SIZE, scoreHear
 import { NOTES, SCENTS } from "../src/lib/scent.ts";
 import { guessMate } from "../src/lib/figures.ts";
 import { picturePrompt } from "../src/lib/picture.ts";
-import { covers } from "../src/lib/cardImage.ts";
+import { covers, weightMatches } from "../src/lib/cardImage.ts";
 
 const people = categories.find((c) => c.id === "people");
 assert.equal(nextStep(people, "start", { start: "친구와 함께했던 시간" }), "scene");
@@ -92,4 +92,8 @@ assert.ok(covers("U+AC00-D7A3", cp("마음")));
 assert.ok(!covers("U+0000-00FF, U+0131", cp("마음")));
 assert.ok(covers("u+4??", cp("ѐ"))); // U+0450, 와일드카드
 assert.ok(!covers("U+4??", cp("a")));
+assert.ok(weightMatches("700", new Set([700])));
+assert.ok(!weightMatches("400", new Set([700])));
+assert.ok(weightMatches("100 900", new Set([300])));
+assert.ok(weightMatches("normal", new Set([400])) && weightMatches("bold", new Set([700])) && weightMatches("", new Set([400])));
 console.log("selftest ok");

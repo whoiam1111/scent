@@ -12,8 +12,9 @@ const label = Jost({ variable: "--font-jost", weight: ["300", "400", "500"], sub
 const script = Mrs_Saint_Delafield({ variable: "--font-script-src", weight: "400", subsets: ["latin"] });
 // 그림일기장의 손글씨·고딕 선택지
 const pen = Nanum_Pen_Script({ variable: "--font-pen-src", weight: "400", subsets: ["latin"], preload: false });
-// 그림일기 카드 글씨체 선택지 (무료 글꼴, 파일 수정 없이 그대로 사용). 결과 화면에서만 쓰니 미리 받지 않는다
-const bookk = localFont({ variable: "--font-bookk", preload: false, src: [{ path: "./fonts/BookkMyungjo-Lt.woff2", weight: "400" }, { path: "./fonts/BookkMyungjo-Bd.woff2", weight: "700" }] });
+// 그림일기 카드 글씨체 선택지 (무료 글꼴, 파일 수정 없이 그대로 사용). 다른 두 개는 고를 때 받는다
+// 기본 글씨체(부크크명조)는 첫 화면에서 미리 받아 둔다: 결과 화면에서 받기 시작하면 키링 이미지가 그만큼 늦게 나온다
+const bookk = localFont({ variable: "--font-bookk", preload: true, src: [{ path: "./fonts/BookkMyungjo-Lt.woff2", weight: "400" }, { path: "./fonts/BookkMyungjo-Bd.woff2", weight: "700" }] });
 // 새음체는 같은 크기에서 글자 몸이 다른 글꼴의 0.7배쯤이라 키워서 맞춘다
 const saeeum = localFont({ variable: "--font-saeeum", preload: false, src: "./fonts/GangwonEduSaeeum.woff", declarations: [{ prop: "size-adjust", value: "135%" }] });
 const omiri = localFont({ variable: "--font-omiri", preload: false, src: "./fonts/Griun_OMIRI-Rg.woff2" });

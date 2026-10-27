@@ -1476,6 +1476,7 @@ function Result({
     const png = rendered?.key === renderKey ? rendered : null;
 
     // 카드가 바뀌고 잠시 멈추면(글자 입력 중엔 기다림) 카드를 PNG로 찍는다
+    const shotOnce = useRef(false);
     useEffect(() => {
         const card = cardRef.current?.firstElementChild;
         if (!(card instanceof HTMLElement)) return;
@@ -1490,7 +1491,8 @@ function Result({
                     setPngError(false);
                 })
                 .catch(() => alive && setPngError(true));
-        }, 400);
+        }, shotOnce.current ? 400 : 0); // 처음엔 바로 찍고, 꾸미는 중에는 잠시 멈출 때까지 기다린다
+        shotOnce.current = true;
         return () => {
             alive = false;
             clearTimeout(t);
