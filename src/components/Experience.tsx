@@ -12,7 +12,7 @@ import {
     type StepId,
 } from '@/lib/explore';
 import { demoDiary, detectScene, EMOTIONS, type SceneHints } from '@/lib/diary';
-import { buildIllustration } from '@/lib/illustration';
+import { buildIllustration, svgToDataUrl } from '@/lib/illustration';
 import {
     AGES,
     blankFigure,
@@ -24,7 +24,7 @@ import {
     type Figure,
     type Figures,
 } from '@/lib/figures';
-import { cardToPng } from '@/lib/cardImage';
+import { cardToPng, cardToPngSafe } from '@/lib/cardImage';
 import DiaryCard, {
     ACCENTS,
     ALIGNS,
@@ -1170,6 +1170,7 @@ export default function Experience() {
                             s={s}
                             emotions={emotionsForDiary}
                             onRestart={() => setConfirmReset(true)}
+                            leaving={confirmReset || idle}
                         />
                     )}
                 </main>
@@ -1439,10 +1440,12 @@ function Result({
     s,
     emotions,
     onRestart,
+    leaving,
 }: {
     s: State;
     emotions: string[];
     onRestart: () => void;
+    leaving: boolean; // 처음부터 다시하기·자리 비움 확인 창이 떠 있다: 곧 화면이 지워진다
 }) {
     const [transparent, setTransparent] = useState(false);
     const [theme, setTheme] = useState<Theme>('book');
@@ -1472,70 +1475,123 @@ function Result({
         emotions.join('|'),
         transparent,
     ].join('\u0000');
-    // 옵션을 바꾸면 새 이미지가 나올 때까지 이전(곧 해제될) 주소는 쓰지 않는다
+    // 옵션을 바꾸면 새 이미지가 나올 때까지 저장·전송에는 이전 이미지를 쓰지 않는다 (미리보기에만 남긴다)
     const png = rendered?.key === renderKey ? rendered : null;
 
     // 카드가 바뀌고 잠시 멈추면(글자 입력 중엔 기다림) 카드를 PNG로 찍는다
+    // 새 이미지가 나올 때까지 이전 이미지를 미리보기에 남겨 두고, 새 것이 오면 이전 주소를 해제한다
     const shotOnce = useRef(false);
+    const [shotTry, setShotTry] = useState(0); // 실패하면 늘려서 저절로 다시 찍는다 (참가자가 누를 버튼 없이)
+    const lastUrl = useRef('');
+    useEffect(() => () => URL.revokeObjectURL(lastUrl.current), []);
+    const keep = (blob: Blob, key: string) => {
+        if (lastUrl.current) URL.revokeObjectURL(lastUrl.current);
+        lastUrl.current = URL.createObjectURL(blob);
+        setRendered({ url: lastUrl.current, key });
+        setPngError(false);
+        return lastUrl.current;
+    };
     useEffect(() => {
         const card = cardRef.current?.firstElementChild;
         if (!(card instanceof HTMLElement)) return;
-        let url = '';
         let alive = true;
         const t = setTimeout(() => {
-            cardToPng(card, transparent)
-                .then((blob) => {
+            cardToPngSafe(card, transparent)
+                .then((blob) => alive && keep(blob, renderKey))
+                .catch(() => {
                     if (!alive) return;
-                    url = URL.createObjectURL(blob);
-                    setRendered({ url, key: renderKey });
-                    setPngError(false);
-                })
-                .catch(() => alive && setPngError(true));
+                    setPngError(true);
+                    if (shotTry < 2) setTimeout(() => setShotTry((n) => n + 1), 1000); // 두 번까지 저절로 다시
+                });
         }, shotOnce.current ? 400 : 0); // 처음엔 바로 찍고, 꾸미는 중에는 잠시 멈출 때까지 기다린다
         shotOnce.current = true;
         return () => {
             alive = false;
             clearTimeout(t);
-            if (url) URL.revokeObjectURL(url);
         };
-    }, [renderKey, transparent]);
+    }, [renderKey, transparent, shotTry]);
 
-    const download = () => {
-        if (!png) return;
-        const a = document.createElement('a');
-        a.href = png.url;
-        a.download = `마음의조각-${theme}-${new Date(s.createdAt ?? Date.now()).toISOString().slice(0, 10)}.png`;
-        a.click();
+    // 저장하기는 언제나 눌린다: 키링 이미지가 아직이면(만드는 중·실패) 그 자리에서 지금 카드를 찍어 저장한다.
+    // 그래도 못 찍으면 그림만이라도 저장한다
+    const [saving, setSaving] = useState(false);
+    const download = async () => {
+        const card = cardRef.current?.firstElementChild;
+        const day = s.createdAt?.slice(0, 10) ?? 'today'; // 결과 화면에서는 늘 만든 시각이 있다
+        const save = (href: string, name: string) => Object.assign(document.createElement('a'), { href, download: name }).click();
+        if (png) {
+            save(png.url, `마음의조각-${theme}-${day}.png`);
+            return void send(png.url, png.key); // 참가자가 저장한 모습을 기다리지 않고 바로 보낸다
+        }
+        setSaving(true);
+        try {
+            if (!(card instanceof HTMLElement)) throw new Error('card');
+            const url = keep(await cardToPngSafe(card, transparent), renderKey);
+            save(url, `마음의조각-${theme}-${day}.png`);
+            void send(url, renderKey);
+        } catch {
+            const pic = s.illustration.startsWith('data:') ? s.illustration : svgToDataUrl(s.illustration);
+            save(pic, `마음의조각-그림-${day}.${/^data:image\/(\w+)/.exec(pic)?.[1].replace('jpeg', 'jpg') ?? 'png'}`);
+        } finally {
+            setSaving(false);
+        }
     };
 
-    // 꾸미기를 멈추고 잠시 지나면 지금 카드를 코칭존으로 자동으로 보낸다 (버튼을 안 눌러도 키링을 만들 수 있게).
-    // 다시 꾸미면 마지막 모습으로 덮어쓴다. 서버 제한(4MB)에 가까우면 가로 1000px로 다시 찍어 보낸다
-    const [sendState, setSendState] = useState<'' | 'sending' | 'sent' | 'error'>('');
-    const [retry, setRetry] = useState(0);
+    // 코칭존 전송: 키링은 참가자가 꾸민 마지막 모습이어야 한다.
+    // - 꾸미기를 멈추고 1초 지나면 지금 모습을 보낸다 (다시 꾸미면 덮어쓴다)
+    // - 저장하기·처음부터 다시하기를 누르면 기다리지 않고 바로 보낸다 (떠나기 직전 모습이 빠지지 않게)
+    // - 한 번에 하나씩 차례로 보내서, 늦게 끝난 옛 모습이 새 모습을 덮지 않는다. 옛 모습 차례가 오면 건너뛴다
+    // - 실패하면 1초·3초 뒤 저절로 다시 (모두 실패하면 '다시 보내기')
+    // 서버 제한(4MB)에 가까우면 가로 1000px로 다시 찍어 보낸다
+    const [sent, setSent] = useState<{ state: 'sending' | 'sent' | 'error'; key: string } | null>(null);
+    const latest = useRef(renderKey);
     useEffect(() => {
-        const card = cardRef.current?.firstElementChild;
-        if (!png || !s.heartId || !(card instanceof HTMLElement)) return;
-        let alive = true;
-        const t = setTimeout(async () => {
-            setSendState('sending');
-            try {
-                let blob = await (await fetch(png.url)).blob();
-                if (blob.size > 3_800_000) blob = await cardToPng(card, transparent, 1000);
-                const res = await fetch(`/api/heart/keyring?id=${s.heartId}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'image/png' },
-                    body: blob,
-                });
-                if (alive) setSendState(res.ok ? 'sent' : 'error');
-            } catch {
-                if (alive) setSendState('error');
+        latest.current = renderKey;
+    }, [renderKey]);
+    const queue = useRef<Promise<unknown>>(Promise.resolve());
+    const sentKey = useRef('');
+    const send = (url: string, key: string) => {
+        const job = queue.current.then(async () => {
+            if (!s.heartId || key !== latest.current || sentKey.current === key) return;
+            setSent({ state: 'sending', key });
+            for (const wait of [0, 1000, 3000]) {
+                await new Promise((r) => setTimeout(r, wait));
+                if (key !== latest.current) return; // 기다리는 사이 또 꾸몄으면 새 모습 차례에 맡긴다
+                try {
+                    let blob = await (await fetch(url)).blob();
+                    const card = cardRef.current?.firstElementChild;
+                    if (blob.size > 3_800_000 && card instanceof HTMLElement) blob = await cardToPng(card, transparent, 1000);
+                    const res = await fetch(`/api/heart/keyring?id=${s.heartId}`, { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob });
+                    if (res.ok) {
+                        sentKey.current = key;
+                        setSent({ state: 'sent', key });
+                        return;
+                    }
+                    if (res.status === 404 || res.status === 400) break; // 결과가 없거나 잘못된 이미지: 다시 해도 같다
+                } catch {
+                    // 네트워크 문제: 잠시 뒤 다시
+                }
             }
-        }, 2500);
-        return () => {
-            alive = false;
-            clearTimeout(t);
-        };
-    }, [png, s.heartId, transparent, retry]);
+            setSent({ state: 'error', key });
+        });
+        queue.current = job.catch(() => {});
+        return job;
+    };
+    useEffect(() => {
+        if (!png) return;
+        const t = setTimeout(() => send(png.url, png.key), 1000);
+        return () => clearTimeout(t);
+    }, [png]); // eslint-disable-line react-hooks/exhaustive-deps -- send는 refs로 최신 값을 읽는다
+    // 처음부터 다시하기(위·아래 버튼)나 자리 비움 확인 창이 뜨면, 기다리지 않고 지금 모습을 바로 보낸다.
+    // 아직 이미지가 없으면 지금 찍어서 보낸다. 확인을 눌러 화면이 지워져도 보내던 것은 끝까지 간다
+    useEffect(() => {
+        if (!leaving || !s.heartId || sentKey.current === renderKey) return;
+        const card = cardRef.current?.firstElementChild;
+        if (png) void send(png.url, png.key);
+        else if (card instanceof HTMLElement)
+            cardToPngSafe(card, transparent)
+                .then((blob) => send(keep(blob, renderKey), renderKey))
+                .catch(() => {}); // 못 찍으면 코칭 화면에 '키링 없음'으로 보인다
+    }, [leaving]); // eslint-disable-line react-hooks/exhaustive-deps -- 확인 창이 뜨는 순간 한 번
 
     const sentence =
         s.generationMode === 'ai'
@@ -1571,16 +1627,17 @@ function Result({
             <div className="flex flex-col gap-4">
                 <h2 className="display text-2xl">키링 미리보기</h2>
                 <KeyringMockup>
-                    {png ? (
+                    {rendered && !pngError ? (
+                        // 꾸미기를 바꾸는 동안에는 이전 이미지를 흐리게 보여 준다 (빈 칸으로 바뀌면 느리게 느껴진다)
                         // eslint-disable-next-line @next/next/no-img-element -- 생성한 PNG 미리보기 (길게 눌러 저장 가능)
                         <img
-                            src={png.url}
+                            src={rendered.url}
                             alt="키링 이미지 미리보기 (실제 아크릴 키링에 끼운 모습)"
-                            className="w-full"
+                            className={`w-full transition-opacity ${png ? '' : 'opacity-50'}`}
                         />
                     ) : (
                         <div className="flex aspect-square items-center justify-center text-mute">
-                            {pngError ? '이미지를 만들지 못했어요.' : '만드는 중…'}
+                            {pngError ? '키링 이미지를 다시 만드는 중…' : '만드는 중…'}
                         </div>
                     )}
                 </KeyringMockup>
@@ -1642,24 +1699,26 @@ function Result({
                     />
                     키링 바깥 배경 투명하게
                 </label>
-                <button type="button" className="btn-main w-full" disabled={!png} onClick={download}>
-                    키링용 이미지 저장하기
+                <button type="button" className="btn-main w-full" disabled={saving} onClick={download}>
+                    {saving ? '키링 이미지 만드는 중…' : '키링용 이미지 저장하기'}
                 </button>
                 <p className="text-center text-sm text-mute">
                     그림 일기와 같은 모양 · 가로 1500px PNG · 저장이 안 되면 위 이미지를 길게 눌러 저장하세요.
                 </p>
-                {sendState && (
+                {sent && s.heartId && (
                     <p
                         role="status"
-                        className={`text-center text-base ${sendState === 'error' ? 'text-gold' : 'text-mute'}`}
+                        className={`text-center text-base ${sent.state === 'error' && sent.key === renderKey ? 'text-gold' : 'text-mute'}`}
                     >
-                        {sendState === 'sending'
-                            ? '코칭존으로 키링 이미지를 보내는 중…'
-                            : sendState === 'sent'
-                              ? '✓ 지금 모습으로 코칭존에 전달됐어요'
-                              : '코칭존으로 보내지 못했어요.'}
-                        {sendState === 'error' && (
-                            <button type="button" className="btn-text ml-1" onClick={() => setRetry((n) => n + 1)}>
+                        {sent.key !== renderKey
+                            ? '바뀐 모습을 곧 코칭존으로 보내요'
+                            : sent.state === 'sending'
+                              ? '코칭존으로 키링 이미지를 보내는 중…'
+                              : sent.state === 'sent'
+                                ? '✓ 지금 모습으로 코칭존에 전달됐어요'
+                                : '코칭존으로 보내지 못했어요.'}
+                        {sent.state === 'error' && sent.key === renderKey && png && (
+                            <button type="button" className="btn-text ml-1" onClick={() => send(png.url, png.key)}>
                                 다시 보내기
                             </button>
                         )}

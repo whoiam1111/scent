@@ -75,10 +75,17 @@ async function fontEmbedCSS(card: HTMLElement) {
       const m = r.style.getPropertyValue("src").match(/url\(["']?([^"')]+)["']?\)/);
       if (!m) return r.cssText; // local() 대체 글꼴
       const url = new URL(m[1], r.parentStyleSheet?.href ?? location.href).href;
-      return r.cssText.replace(m[0], `url(${await toDataUrl(url)})`);
+      // 글꼴 하나를 못 받아도 이미지는 만든다 (그 글자만 기본 글꼴로)
+      return toDataUrl(url).then((d) => r.cssText.replace(m[0], `url(${d})`), () => "");
     }),
   );
   return css.join("\n");
+}
+
+// 만들다 멈추거나 실패하면 가로 1000px로 한 번 더 (메모리·시간이 절반 아래). 그래도 안 되면 실패
+export async function cardToPngSafe(card: HTMLElement, transparent: boolean): Promise<Blob> {
+  const limit = <T,>(p: Promise<T>) => Promise.race([p, new Promise<never>((_, no) => setTimeout(() => no(new Error("timeout")), 15_000))]);
+  return limit(cardToPng(card, transparent)).catch(() => limit(cardToPng(card, transparent, 1000)));
 }
 
 export async function cardToPng(card: HTMLElement, transparent: boolean, width = KEYRING_WIDTH): Promise<Blob> {
@@ -86,7 +93,7 @@ export async function cardToPng(card: HTMLElement, transparent: boolean, width =
   // backgroundColor 옵션은 카드 자체의 바탕을 덮어써서 쓰지 않고, 아래에서 따로 깐다
   const opts = { fontEmbedCSS: await fontEmbedCSS(card), pixelRatio: width / card.offsetWidth, style: { rotate: "none", transform: "none", margin: "0" } }; // 폴라로이드 기울기는 화면용
   // shortcut: Safari는 첫 렌더에서 그림이 빠지는 일이 있어 Safari에서만 한 번 더 찍는다. 라이브러리가 고치면 제거
-  if (/^((?!chrome|android|crios|fxios).)*safari/i.test(navigator.userAgent)) await toCanvas(card, opts);
+  if (/^((?!chrome|android|crios|fxios).)*safari/i.test(navigator.userAgent)) free(await toCanvas(card, opts));
   const shot = await toCanvas(card, opts);
   const out = document.createElement("canvas");
   out.width = shot.width;
@@ -98,5 +105,11 @@ export async function cardToPng(card: HTMLElement, transparent: boolean, width =
     ctx.fillRect(0, 0, out.width, out.height);
   }
   ctx.drawImage(shot, 0, 0);
-  return new Promise((resolve, reject) => out.toBlob((b) => (b ? resolve(b) : reject(new Error("png"))), "image/png"));
+  free(shot);
+  return new Promise<Blob>((resolve, reject) => out.toBlob((b) => (b ? resolve(b) : reject(new Error("png"))), "image/png")).finally(() => free(out));
 }
+
+// iPad Safari는 캔버스 메모리 한도가 작아, 꾸미기를 여러 번 바꾸면 이미지가 안 만들어진다. 다 쓴 캔버스는 바로 비운다
+const free = (c: HTMLCanvasElement) => {
+  c.width = c.height = 0;
+};
