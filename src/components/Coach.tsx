@@ -322,7 +322,6 @@ const KITS = [
   ["6도형 검사", "심층 성향 파악"],
   ["인생그래프", "삶의 궤적 시각화"],
   ["성격유형 검사", "성격 유형 분석"],
-  ["성격유형 검사(신)", "성격 유형 분석"],
   ["애착유형 검사", "대인관계 패턴 및 정서적 유대 분석"],
   ["핵심감정 검사", "내면 감정 파악"],
   ["회복탄력성 검사", "자기조절·대인관계·긍정성 분석"],
@@ -428,18 +427,11 @@ function FollowUpForm({ row, type, scent, onSaved }: { row: HeartRow; type: stri
           <span className="block text-sm text-ivory/70">향으로 표현하는 것을 넘어, 나를 이해하는 과정으로</span>
         </li>
       </ol>
-      <ul className="mt-3 grid gap-2 sm:grid-cols-3">
-        {["핵심감정과 반복되는 행동 패턴 탐색", "나의 생각과 감정의 원인 이해", "나만의 가치관과 삶의 방향 정립"].map((t) => (
-          <li key={t} className="border-l-2 border-gold pl-3">
-            {t}
-          </li>
-        ))}
-      </ul>
 
       {/* 6회 동안 쓰는 검사 키트 */}
       <div className="mt-6 break-inside-avoid">
         <p className={LABEL}>6회 동안 함께하는 검사 키트</p>
-        <ol className="mt-2 grid gap-px border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
+        <ol className="mt-2 grid gap-px border border-line bg-line sm:grid-cols-2 lg:grid-cols-3">
           {KITS.map(([t, d], i) => (
             <li key={t} className="bg-paper px-4 py-3">
               <span className="disp-en text-sm text-gold tabular-nums">{String(i + 1).padStart(2, "0")}</span>
