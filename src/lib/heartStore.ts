@@ -24,8 +24,8 @@ export const retentionDays = () => Number(process.env.HEART_RETENTION_DAYS) || 7
 
 const mem = ((globalThis as { __heart?: MemRow[] }).__heart ??= []);
 
-async function rest(path: string, init: RequestInit = {}) {
-  const res = await fetch(`${url}/rest/v1/heart_results${path}`, {
+async function rest(path: string, init: RequestInit = {}, table = "heart_results") {
+  const res = await fetch(`${url}/rest/v1/${table}${path}`, {
     ...init,
     cache: "no-store",
     headers: { apikey: key!, Authorization: `Bearer ${key}`, "Content-Type": "application/json", Prefer: "return=representation", ...init.headers },
@@ -119,4 +119,16 @@ export async function deleteHeart(id: string) {
   if (!remote) return void mem.splice(0, mem.length, ...mem.filter((r) => r.id !== id));
   await removeImages([id]);
   await rest(`?id=eq.${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+// 텔레그램 누적 메시지 번호 (날짜별). 하루에 메시지 하나를 계속 고쳐 쓰고, 길어지면 다음 메시지로 이어 간다
+const tgMem = ((globalThis as { __tg?: Map<string, number[]> }).__tg ??= new Map());
+export async function getTelegramIds(day: string): Promise<number[]> {
+  if (!remote) return tgMem.get(day) ?? [];
+  const rows: { message_ids: number[] }[] = await rest(`?day=eq.${day}&select=message_ids`, {}, "telegram_logs");
+  return rows[0]?.message_ids ?? [];
+}
+export async function setTelegramIds(day: string, ids: number[]) {
+  if (!remote) return void tgMem.set(day, ids);
+  await rest("", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify({ day, message_ids: ids }) }, "telegram_logs");
 }

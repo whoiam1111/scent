@@ -15,6 +15,9 @@ alter table heart_results add column if not exists keyring_at timestamptz;
 alter table heart_results add column if not exists scent jsonb;
 -- 6회 코칭 신청 {phone, slots: ["YYYY-MM-DDTHH:mm"], agreed, at} (코칭존 패드에서 받는다)
 alter table heart_results add column if not exists followup jsonb;
+-- 텔레그램 누적 메시지: 날짜별로 고쳐 쓸 메시지 번호
+create table if not exists telegram_logs (day date primary key, message_ids jsonb not null default '[]');
+alter table telegram_logs enable row level security;
 -- 버킷이 없으면 만든다 (비공개, PNG만, 5MB까지)
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('image', 'image', false, 5242880, array['image/png'])
