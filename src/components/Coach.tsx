@@ -288,6 +288,8 @@ function Sheet({ row, onBack, onDelete }: { row: HeartRow; onBack: () => void; o
               </p>
             </section>
           ))}
+
+          <FollowUp name={row.name} scent={sc ? `${sc.top} · ${sc.middle} · ${sc.base}` : null} />
         </div>
 
         {/* 키링 */}
@@ -308,5 +310,81 @@ function Sheet({ row, onBack, onDelete }: { row: HeartRow; onBack: () => void; o
         </aside>
       </div>
     </article>
+  );
+}
+
+// 후속지: 6회 자기이해 코칭 신청. 인쇄하면 새 장에 나오고, 현장에서 손으로 적어 받는다
+function FollowUp({ name, scent }: { name: string; scent: string | null }) {
+  const line = "mt-1 h-10 border-b border-ink";
+  return (
+    <section className="mt-10 border-t-2 border-ink pt-6 break-inside-avoid print:break-before-page print:mt-0 print:border-t-0">
+      <p className={LABEL}>후속 프로그램 신청</p>
+      <h3 className="display mt-2 text-[clamp(1.6rem,3vw,2.2rem)] font-normal">정답을 아는 것에서, 나만의 답을 만드는 것으로</h3>
+      <div className="mt-4 flex flex-col gap-3 leading-relaxed">
+        <p>
+          AI는 정답을 빠르게 알려 줄 수 있지만, 내가 어떤 경험과 감정, 생각을 거쳐 지금의 내가 되었는지, 앞으로 어떻게 살아가야 할지는 대신
+          정해 줄 수 없어요. 오늘 나온 핵심감정도 결과를 아는 데서 끝나지 않고, 그 감정을 따라가 보는 시간이 필요해요.
+        </p>
+        <ul className="ml-5 list-disc text-mute">
+          <li>나는 왜 이런 감정을 자주 느끼는지</li>
+          <li>이 감정이 나의 선택과 관계에 어떤 영향을 주는지</li>
+          <li>내가 진정으로 원하는 삶은 무엇인지</li>
+        </ul>
+        <p>
+          오늘은 나를 표현하는 향{scent ? `(${scent})` : ""}을 만들었다면, 앞으로의 <b>6회 자기이해 코칭</b>은 나라는 사람을 더 깊이 이해하고 나만의 삶의
+          공식을 찾아가는 시간이에요.
+        </p>
+      </div>
+
+      <dl className="mt-6 grid gap-px border border-line bg-line sm:grid-cols-2">
+        <div className="bg-paper px-5 py-4">
+          <dt className="font-bold">첫 회차 일정은 오늘 이 자리에서 정해요</dt>
+          <dd className="mt-1 text-sm text-mute">신청과 함께 첫 만남 날짜를 확정해, 바쁜 일상 속에서도 시작을 놓치지 않게 해요.</dd>
+        </div>
+        <div className="bg-paper px-5 py-4">
+          <dt className="font-bold">첫 회차에 개인별 결과 리포트를 드려요</dt>
+          <dd className="mt-1 text-sm text-mute">오늘의 핵심감정 결과를 더 넓고 깊게 풀어, 6회 동안 이어 갈 나만의 출발점으로 삼아요.</dd>
+        </div>
+      </dl>
+
+      <div className="mt-6 grid gap-x-6 gap-y-4 sm:grid-cols-2">
+        <div>
+          <p className={LABEL}>이름</p>
+          <p className={`${line} flex items-end pb-1 text-lg`}>{name}</p>
+        </div>
+        <div>
+          <p className={LABEL}>연락처</p>
+          <p className={line} />
+        </div>
+        <div className="sm:col-span-2">
+          <p className={LABEL}>첫 회차 일정</p>
+          <p className={`${line} flex items-end gap-6 pb-1 text-mute`}>
+            <span>　　월　　일 (　　)</span>
+            <span>　　시　　분</span>
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-6 border border-ink px-5 py-4">
+        <p className="font-bold">신청 시 주의사항</p>
+        <p className="mt-1 leading-relaxed">
+          프로그램은 신청 인원에 맞춰 저희가 비용을 미리 지불하고 준비해요. 예약한 일정에 꼭 참석해 주시고, 부득이한 사정이 생기면 미리 알려
+          주세요. 함께하는 시간을 위해 책임감 있게 참여해 주시면 감사하겠습니다.
+        </p>
+      </div>
+
+      <p className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 text-lg">
+        <span>위 신청 시 주의사항 안내를 받았습니다.</span>
+        <span className="flex gap-5 font-bold">
+          <span>□ Y</span>
+          <span>□ N</span>
+        </span>
+      </p>
+      <p className="mt-6 flex justify-end gap-3 text-lg">
+        <span>신청인</span>
+        <span className="w-40 border-b border-ink" />
+        <span className="text-mute">(서명)</span>
+      </p>
+    </section>
   );
 }
