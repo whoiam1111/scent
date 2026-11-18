@@ -8,9 +8,10 @@ import { randomInt } from "node:crypto";
 // scent: 참가자 화면에 보여 준 향 조합 그대로 (조향사용). 나중에 조합표가 바뀌어도 그날 추천한 향이 남는다
 export type SavedScent = { type: string; top: string; middle: string; base: string };
 // followup: 후속 프로그램 신청 (코칭존 패드에서 받는다). program이 없으면 예전 신청 = 코칭
-// slots는 코칭 희망 일정 "YYYY-MM-DDTHH:mm" (현지 시각), 독서 인문학 강의는 빈 배열
-export type Program = "coaching" | "reading";
-export type FollowUp = { program?: Program; phone: string; slots: string[]; agreed: true; at: string };
+// slots는 코칭 희망 일정 "YYYY-MM-DDTHH:mm" (현지 시각), 그 밖에는 빈 배열. none = 신청은 안 하고 연락처만
+// birth: 생년월일 "YYYY-MM-DD" (생일 이벤트). agreed: 신청 주의사항 안내 확인 (none은 false)
+export type Program = "coaching" | "reading" | "none";
+export type FollowUp = { program?: Program; phone: string; birth?: string; slots: string[]; agreed: boolean; at: string };
 export type HeartRow = { id: string; code: string; name: string; checks: string[]; created_at: string; keyring_at?: string | null; scent?: SavedScent | null; followup?: FollowUp | null };
 type MemRow = HeartRow & { keyring?: Buffer };
 
@@ -103,15 +104,15 @@ export async function getKeyring(id: string): Promise<Buffer | null> {
   return res.ok ? Buffer.from(await res.arrayBuffer()) : null;
 }
 
-// 코칭 신청을 결과에 붙인다. 다시 신청하면 덮어쓴다. 해당 결과가 없으면 false
-export async function saveFollowUp(id: string, followup: FollowUp): Promise<boolean> {
+// 신청을 결과에 붙인다. 다시 신청하면 덮어쓴다. 바뀐 결과를 돌려주고, 해당 결과가 없으면 null
+export async function saveFollowUp(id: string, followup: FollowUp): Promise<HeartRow | null> {
   if (!remote) {
     const row = mem.find((r) => r.id === id);
     if (row) row.followup = followup;
-    return Boolean(row);
+    return row ?? null;
   }
-  const rows: unknown[] = await rest(`?id=eq.${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ followup }) });
-  return rows.length > 0;
+  const rows: HeartRow[] = await rest(`?id=eq.${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ followup }) });
+  return rows[0] ?? null;
 }
 
 export async function deleteHeart(id: string) {
