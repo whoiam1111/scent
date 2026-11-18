@@ -24,7 +24,7 @@ import {
     type Figure,
     type Figures,
 } from '@/lib/figures';
-import { cardToPng, cardToPngSafe } from '@/lib/cardImage';
+import { cardToPngSafe, shrinkPng } from '@/lib/cardImage';
 import DiaryCard, {
     ACCENTS,
     ALIGNS,
@@ -131,6 +131,9 @@ const todayPrompts = [
     '앞으로 만들고 싶은 순간',
 ];
 
+// 코칭존으로 보내는 중인 키링 전송. 처음부터 다시할 때 이게 끝난 뒤 새로고침한다
+let pendingSend: Promise<unknown> = Promise.resolve();
+
 export default function Experience() {
     const [screen, setScreen] = useState<Screen>('start');
     const [s, setS] = useState<State>(initial);
@@ -162,6 +165,9 @@ export default function Experience() {
         setPrompt(DEFAULT_PROMPT);
         setScreen('start');
         window.scrollTo(0, 0);
+        // 태블릿은 한 탭으로 하루 종일 쓰여서 메모리가 쌓이면 키링 이미지를 못 만든다.
+        // 참가자마다 새로고침해 비운다 (보내던 키링은 끝까지 보내고, 15초가 넘으면 그냥)
+        Promise.race([pendingSend, new Promise((r) => setTimeout(r, 15_000))]).then(() => location.reload());
     }, []);
 
     const cat = categories.find((c) => c.id === s.memoryExplorationCategory) ?? null;
@@ -1459,7 +1465,7 @@ function Result({
     const [textEdit, setTextEdit] = useState(s.diaryText);
     const title = titleEdit.trim() || s.diaryTitle;
     const text = textEdit.trim() || s.diaryText;
-    const [rendered, setRendered] = useState<{ url: string; key: string } | null>(null);
+    const [rendered, setRendered] = useState<{ url: string; key: string; blob: Blob } | null>(null);
     const [pngError, setPngError] = useState(false);
     const cardRef = useRef<HTMLDivElement>(null);
     const renderKey = [
@@ -1487,7 +1493,7 @@ function Result({
     const keep = (blob: Blob, key: string) => {
         if (lastUrl.current) URL.revokeObjectURL(lastUrl.current);
         lastUrl.current = URL.createObjectURL(blob);
-        setRendered({ url: lastUrl.current, key });
+        setRendered({ url: lastUrl.current, key, blob });
         setPngError(false);
         return lastUrl.current;
     };
@@ -1520,14 +1526,14 @@ function Result({
         const save = (href: string, name: string) => Object.assign(document.createElement('a'), { href, download: name }).click();
         if (png) {
             save(png.url, `마음의조각-${theme}-${day}.png`);
-            return void send(png.url, png.key); // 참가자가 저장한 모습을 기다리지 않고 바로 보낸다
+            return void send(png.blob, png.key); // 참가자가 저장한 모습을 기다리지 않고 바로 보낸다
         }
         setSaving(true);
         try {
             if (!(card instanceof HTMLElement)) throw new Error('card');
-            const url = keep(await cardToPngSafe(card, transparent), renderKey);
-            save(url, `마음의조각-${theme}-${day}.png`);
-            void send(url, renderKey);
+            const blob = await cardToPngSafe(card, transparent);
+            save(keep(blob, renderKey), `마음의조각-${theme}-${day}.png`);
+            void send(blob, renderKey);
         } catch {
             const pic = s.illustration.startsWith('data:') ? s.illustration : svgToDataUrl(s.illustration);
             save(pic, `마음의조각-그림-${day}.${/^data:image\/(\w+)/.exec(pic)?.[1].replace('jpeg', 'jpg') ?? 'png'}`);
@@ -1541,7 +1547,8 @@ function Result({
     // - 저장하기·처음부터 다시하기를 누르면 기다리지 않고 바로 보낸다 (떠나기 직전 모습이 빠지지 않게)
     // - 한 번에 하나씩 차례로 보내서, 늦게 끝난 옛 모습이 새 모습을 덮지 않는다. 옛 모습 차례가 오면 건너뛴다
     // - 실패하면 1초·3초 뒤 저절로 다시 (모두 실패하면 '다시 보내기')
-    // 서버 제한(4MB)에 가까우면 가로 1000px로 다시 찍어 보낸다
+    // - 이미지 데이터(blob)를 직접 들고 있어서, 화면이 바뀌어 미리보기 주소가 해제돼도 끝까지 보낸다
+    // 서버 제한(4MB)에 가까우면 만든 PNG를 가로 1000px로 줄여 보낸다 (카드를 다시 찍지 않는다: 태블릿 메모리)
     const [sent, setSent] = useState<{ state: 'sending' | 'sent' | 'error'; key: string } | null>(null);
     const latest = useRef(renderKey);
     useEffect(() => {
@@ -1549,7 +1556,7 @@ function Result({
     }, [renderKey]);
     const queue = useRef<Promise<unknown>>(Promise.resolve());
     const sentKey = useRef('');
-    const send = (url: string, key: string) => {
+    const send = (png: Blob, key: string) => {
         const job = queue.current.then(async () => {
             if (!s.heartId || key !== latest.current || sentKey.current === key) return;
             setSent({ state: 'sending', key });
@@ -1557,9 +1564,7 @@ function Result({
                 await new Promise((r) => setTimeout(r, wait));
                 if (key !== latest.current) return; // 기다리는 사이 또 꾸몄으면 새 모습 차례에 맡긴다
                 try {
-                    let blob = await (await fetch(url)).blob();
-                    const card = cardRef.current?.firstElementChild;
-                    if (blob.size > 3_800_000 && card instanceof HTMLElement) blob = await cardToPng(card, transparent, 1000);
+                    const blob = png.size > 3_800_000 ? await shrinkPng(png, 1000) : png;
                     const res = await fetch(`/api/heart/keyring?id=${s.heartId}`, { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob });
                     if (res.ok) {
                         sentKey.current = key;
@@ -1573,12 +1578,12 @@ function Result({
             }
             setSent({ state: 'error', key });
         });
-        queue.current = job.catch(() => {});
+        queue.current = pendingSend = job.catch(() => {});
         return job;
     };
     useEffect(() => {
         if (!png) return;
-        const t = setTimeout(() => send(png.url, png.key), 1000);
+        const t = setTimeout(() => send(png.blob, png.key), 1000);
         return () => clearTimeout(t);
     }, [png]); // eslint-disable-line react-hooks/exhaustive-deps -- send는 refs로 최신 값을 읽는다
     // 처음부터 다시하기(위·아래 버튼)나 자리 비움 확인 창이 뜨면, 기다리지 않고 지금 모습을 바로 보낸다.
@@ -1586,11 +1591,14 @@ function Result({
     useEffect(() => {
         if (!leaving || !s.heartId || sentKey.current === renderKey) return;
         const card = cardRef.current?.firstElementChild;
-        if (png) void send(png.url, png.key);
+        if (png) void send(png.blob, png.key);
         else if (card instanceof HTMLElement)
-            cardToPngSafe(card, transparent)
-                .then((blob) => send(keep(blob, renderKey), renderKey))
-                .catch(() => {}); // 못 찍으면 코칭 화면에 '키링 없음'으로 보인다
+            pendingSend = Promise.all([
+                pendingSend, // 이미 보내던 것도 같이 기다린다
+                cardToPngSafe(card, transparent)
+                    .then((blob) => (keep(blob, renderKey), send(blob, renderKey)))
+                    .catch(() => {}), // 못 찍으면 코칭 화면에 '키링 없음'으로 보인다
+            ]);
     }, [leaving]); // eslint-disable-line react-hooks/exhaustive-deps -- 확인 창이 뜨는 순간 한 번
 
     const sentence =
@@ -1718,7 +1726,7 @@ function Result({
                                 ? '✓ 지금 모습으로 코칭존에 전달됐어요'
                                 : '코칭존으로 보내지 못했어요.'}
                         {sent.state === 'error' && sent.key === renderKey && png && (
-                            <button type="button" className="btn-text ml-1" onClick={() => send(png.url, png.key)}>
+                            <button type="button" className="btn-text ml-1" onClick={() => send(png.blob, png.key)}>
                                 다시 보내기
                             </button>
                         )}

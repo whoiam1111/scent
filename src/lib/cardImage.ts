@@ -109,6 +109,17 @@ export async function cardToPng(card: HTMLElement, transparent: boolean, width =
   return new Promise<Blob>((resolve, reject) => out.toBlob((b) => (b ? resolve(b) : reject(new Error("png"))), "image/png")).finally(() => free(out));
 }
 
+// 이미 만든 PNG를 가로 width로 줄인다 (카드를 다시 찍는 것보다 훨씬 가볍다). 투명 배경은 그대로
+export async function shrinkPng(png: Blob, width: number): Promise<Blob> {
+  const img = await createImageBitmap(png);
+  const out = document.createElement("canvas");
+  out.width = width;
+  out.height = Math.round((img.height * width) / img.width);
+  out.getContext("2d")!.drawImage(img, 0, 0, out.width, out.height);
+  img.close();
+  return new Promise<Blob>((resolve, reject) => out.toBlob((b) => (b ? resolve(b) : reject(new Error("png"))), "image/png")).finally(() => free(out));
+}
+
 // iPad Safari는 캔버스 메모리 한도가 작아, 꾸미기를 여러 번 바꾸면 이미지가 안 만들어진다. 다 쓴 캔버스는 바로 비운다
 const free = (c: HTMLCanvasElement) => {
   c.width = c.height = 0;
