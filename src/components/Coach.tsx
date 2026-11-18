@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { AREAS, scoreHeart, type HeartScore } from "@/lib/heart";
-import type { HeartRow } from "@/lib/heartStore";
+import type { HeartRow, Program } from "@/lib/heartStore";
 import { NOTES, SCENTS } from "@/lib/scent";
 
 // 코칭존 상담사 화면: 참가자가 알려 준 이름으로 찾는다. 목록에서 누르면 결과지로 넘어가고 '목록'으로 돌아온다.
@@ -140,7 +140,7 @@ export default function Coach() {
                         {sc && <span className="block truncate text-sm">향 {sc.top} · {sc.middle} · {sc.base}</span>}
                       </span>
                       <span className="flex gap-1.5 font-label text-xs tracking-[0.08em] max-sm:hidden">
-                        <span className={`px-2 ${r.followup ? "bg-ink text-ivory" : "invisible"}`}>신청</span>
+                        <span className={`px-2 ${r.followup ? "bg-ink text-ivory" : "invisible"}`}>{r.followup?.program === "reading" ? "독서" : "코칭"} 신청</span>
                         <span className={`px-2 ${r.keyring_at ? "bg-apricot text-gold" : "invisible"}`}>키링</span>
                       </span>
                       <span className="flex items-center gap-3 font-label text-sm text-mute tabular-nums">
@@ -318,6 +318,15 @@ function Sheet({ row, onBack, onDelete, onSaved }: { row: HeartRow; onBack: () =
 
 // 후속지: 툴즈 6회 자기이해 코칭 신청. 코칭존 패드에서 참가자가 직접 희망 일정을 달력에서 골라 신청한다
 const MAX_SLOTS = 3;
+const KITS = [
+  ["6도형 검사", "심층 성향 파악"],
+  ["인생그래프", "삶의 궤적 시각화"],
+  ["성격유형 검사", "성격 유형 분석"],
+  ["성격유형 검사(신)", "성격 유형 분석"],
+  ["애착유형 검사", "대인관계 패턴 및 정서적 유대 분석"],
+  ["핵심감정 검사", "내면 감정 파악"],
+  ["회복탄력성 검사", "자기조절·대인관계·긍정성 분석"],
+] as const;
 const TIMES = Array.from({ length: 21 }, (_, i) => `${String(10 + Math.floor(i / 2)).padStart(2, "0")}:${i % 2 ? "30" : "00"}`); // 10:00~20:00
 const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const WEEK = "일월화수목금토";
@@ -329,6 +338,7 @@ const dayText = (date: string) => {
 function FollowUpForm({ row, type, scent, onSaved }: { row: HeartRow; type: string; scent: string | null; onSaved: () => void }) {
   const saved = row.followup;
   const [slots, setSlots] = useState(() => (saved?.slots ?? []).map((s) => ({ date: s.slice(0, 10), time: s.slice(11) })));
+  const [program, setProgram] = useState<Program>(saved?.program ?? "coaching");
   const [phone, setPhone] = useState(saved?.phone ?? "");
   const [agreed, setAgreed] = useState<boolean | null>(saved ? true : null);
   const [state, setState] = useState<{ busy?: boolean; error?: string; done?: boolean }>({});
@@ -336,7 +346,8 @@ function FollowUpForm({ row, type, scent, onSaved }: { row: HeartRow; type: stri
   const toggle = (date: string) =>
     setSlots((ss) => (ss.some((s) => s.date === date) ? ss.filter((s) => s.date !== date) : ss.length < MAX_SLOTS ? [...ss, { date, time: "" }].sort((a, b) => a.date.localeCompare(b.date)) : ss));
   const phoneOk = /^0\d{1,2}-?\d{3,4}-?\d{4}$/.test(phone.trim());
-  const ready = slots.length > 0 && slots.every((s) => s.time) && phoneOk && agreed === true;
+  const slotsOk = program === "reading" || (slots.length > 0 && slots.every((s) => s.time));
+  const ready = slotsOk && phoneOk && agreed === true;
 
   const submit = async () => {
     setState({ busy: true });
@@ -344,7 +355,7 @@ function FollowUpForm({ row, type, scent, onSaved }: { row: HeartRow; type: stri
       const res = await fetch(`/api/coach/followup?id=${row.id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: phone.trim(), slots: slots.map((s) => `${s.date}T${s.time}`), agreed: true }),
+        body: JSON.stringify({ program, phone: phone.trim(), slots: slots.map((s) => `${s.date}T${s.time}`), agreed: true }),
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j.error);
@@ -425,6 +436,20 @@ function FollowUpForm({ row, type, scent, onSaved }: { row: HeartRow; type: stri
         ))}
       </ul>
 
+      {/* 6회 동안 쓰는 검사 키트 */}
+      <div className="mt-6 break-inside-avoid">
+        <p className={LABEL}>6회 동안 함께하는 검사 키트</p>
+        <ol className="mt-2 grid gap-px border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
+          {KITS.map(([t, d], i) => (
+            <li key={t} className="bg-paper px-4 py-3">
+              <span className="disp-en text-sm text-gold tabular-nums">{String(i + 1).padStart(2, "0")}</span>
+              <span className="ml-2 font-bold">{t}</span>
+              <span className="block text-sm text-mute">{d}</span>
+            </li>
+          ))}
+        </ol>
+      </div>
+
       <p className="display mt-8 text-center text-[clamp(1.3rem,2.4vw,1.7rem)] leading-snug font-normal">
         정답을 아는 것에서 끝나지 않고, 나만의 답을 만들어 가는 것.
         <br />
@@ -434,8 +459,22 @@ function FollowUpForm({ row, type, scent, onSaved }: { row: HeartRow; type: stri
       {/* 신청: 패드에서 직접 */}
       <div className="mt-8 border border-ink bg-paper px-5 py-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h3 className="text-xl font-bold">6회 자기이해 코칭 신청</h3>
+          <h3 className="text-xl font-bold">후속 프로그램 신청</h3>
           {saved && <span className="bg-ink px-2 py-0.5 font-label text-xs tracking-[0.08em] text-ivory">신청됨 · {new Date(saved.at).toLocaleString("ko-KR")}</span>}
+        </div>
+
+        <div role="radiogroup" aria-label="신청할 프로그램" className="mt-4 grid gap-px border border-ink bg-ink sm:grid-cols-2">
+          {(
+            [
+              ["coaching", "6회 자기이해 코칭", "툴즈 · 검사 키트와 함께 나만의 공식 찾기"],
+              ["reading", "독서 인문학 강의", "코칭 대신 · 툴즈 × 로고스스튜디오"],
+            ] as [Program, string, string][]
+          ).map(([id, t, d]) => (
+            <button key={id} type="button" role="radio" aria-checked={program === id} onClick={() => setProgram(id)} className={`min-h-16 px-5 py-3 text-left ${program === id ? "bg-ink text-ivory" : "bg-paper"}`}>
+              <span className="block text-lg font-bold">{t}</span>
+              <span className={`block text-sm ${program === id ? "text-ivory/70" : "text-mute"}`}>{d}</span>
+            </button>
+          ))}
         </div>
 
         <div className="mt-5 grid gap-x-6 gap-y-4 sm:grid-cols-2">
@@ -451,6 +490,12 @@ function FollowUpForm({ row, type, scent, onSaved }: { row: HeartRow; type: stri
           </div>
         </div>
 
+        {program === "reading" ? (
+          <p className="mt-6 border-l-2 border-gold py-1 pl-4 leading-relaxed">
+            툴즈와 로고스스튜디오가 함께하는 <b>독서 인문학 강의</b>예요. 책을 함께 읽고 나누며 나와 삶을 돌아보는 시간이에요. 강의 일정과 내용은 적어 주신 연락처로 안내드려요.
+          </p>
+        ) : (
+          <>
         <p className={`${LABEL} mt-6`}>
           희망 일정 · 달력에서 가능한 날을 {MAX_SLOTS}개까지 누르고 시간을 골라 주세요 ({slots.length}/{MAX_SLOTS})
         </p>
@@ -485,6 +530,8 @@ function FollowUpForm({ row, type, scent, onSaved }: { row: HeartRow; type: stri
             {slots.length === 0 && <li className="border border-dashed border-line px-4 py-6 text-center text-mute">아직 고른 날이 없어요.</li>}
           </ol>
         </div>
+          </>
+        )}
 
         <div className="mt-6 border-t border-line pt-5">
           <p className="font-bold">신청 시 주의사항</p>
@@ -516,7 +563,7 @@ function FollowUpForm({ row, type, scent, onSaved }: { row: HeartRow; type: stri
           {state.error && <p className="mr-auto text-gold">{state.error}</p>}
           {state.done && <p className="mr-auto">✓ 신청이 저장됐어요.</p>}
           {!ready && !state.error && !state.done && (
-            <p className="mr-auto text-sm text-mute">{!phoneOk ? "연락처를 적어 주세요." : slots.length === 0 ? "희망 날짜를 골라 주세요." : slots.some((s) => !s.time) ? "고른 날마다 시간을 골라 주세요." : "주의사항 안내에 Y를 눌러 주세요."}</p>
+            <p className="mr-auto text-sm text-mute">{!phoneOk ? "연락처를 적어 주세요." : !slotsOk ? (slots.length === 0 ? "희망 날짜를 골라 주세요." : "고른 날마다 시간을 골라 주세요.") : "주의사항 안내에 Y를 눌러 주세요."}</p>
           )}
           <button type="button" className="btn-main min-h-14 px-8 text-lg" disabled={!ready || state.busy} onClick={submit}>
             {state.busy ? "저장 중…" : saved ? "신청 내용 고치기" : "신청하기"}
@@ -580,3 +627,4 @@ function Calendar({ picked, full, onToggle }: { picked: string[]; full: boolean;
     </div>
   );
 }
+
