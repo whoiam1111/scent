@@ -93,7 +93,7 @@ export default function Coach() {
         {error && <p className="mb-4 border-l-2 border-gold py-1 pl-4 text-gold print:hidden">{error} · 15초 뒤 다시 시도해요.</p>}
 
         {open ? (
-          <Sheet row={open} onBack={() => setOpenId(null)} onDelete={() => remove(open)} />
+          <Sheet row={open} onBack={() => setOpenId(null)} onDelete={() => remove(open)} onSaved={load} />
         ) : (
           <>
         <dl className="grid grid-cols-2 border border-line bg-paper sm:grid-cols-4 print:hidden">
@@ -139,7 +139,10 @@ export default function Coach() {
                         <span className="block truncate text-mute">{top.map((x) => x.type.name).join(" · ") || "체크 없음"}</span>
                         {sc && <span className="block truncate text-sm">향 {sc.top} · {sc.middle} · {sc.base}</span>}
                       </span>
-                      <span className={`px-2 font-label text-xs tracking-[0.08em] max-sm:hidden ${r.keyring_at ? "bg-apricot text-gold" : "invisible"}`}>키링</span>
+                      <span className="flex gap-1.5 font-label text-xs tracking-[0.08em] max-sm:hidden">
+                        <span className={`px-2 ${r.followup ? "bg-ink text-ivory" : "invisible"}`}>신청</span>
+                        <span className={`px-2 ${r.keyring_at ? "bg-apricot text-gold" : "invisible"}`}>키링</span>
+                      </span>
                       <span className="flex items-center gap-3 font-label text-sm text-mute tabular-nums">
                         {time(r.created_at)}
                         <span aria-hidden>›</span>
@@ -176,7 +179,7 @@ function Stat({ label, value, unit, text }: { label: string; value?: number; uni
   );
 }
 
-function Sheet({ row, onBack, onDelete }: { row: HeartRow; onBack: () => void; onDelete: () => void }) {
+function Sheet({ row, onBack, onDelete, onSaved }: { row: HeartRow; onBack: () => void; onDelete: () => void; onSaved: () => void }) {
   const scores = scoreHeart(new Set(row.checks));
   const top = scores.filter((x) => x.ratio === scores[0].ratio);
   const max = scores[0].ratio || 1;
@@ -289,7 +292,7 @@ function Sheet({ row, onBack, onDelete }: { row: HeartRow; onBack: () => void; o
             </section>
           ))}
 
-          <FollowUp name={row.name} scent={sc ? `${sc.top} · ${sc.middle} · ${sc.base}` : null} />
+          <FollowUpForm key={row.id} row={row} type={top.map((x) => x.type.name).join(" · ")} scent={sc ? `${sc.top} · ${sc.middle} · ${sc.base}` : null} onSaved={onSaved} />
         </div>
 
         {/* 키링 */}
@@ -313,78 +316,267 @@ function Sheet({ row, onBack, onDelete }: { row: HeartRow; onBack: () => void; o
   );
 }
 
-// 후속지: 6회 자기이해 코칭 신청. 인쇄하면 새 장에 나오고, 현장에서 손으로 적어 받는다
-function FollowUp({ name, scent }: { name: string; scent: string | null }) {
-  const line = "mt-1 h-10 border-b border-ink";
+// 후속지: 툴즈 6회 자기이해 코칭 신청. 코칭존 패드에서 참가자가 직접 희망 일정을 달력에서 골라 신청한다
+const MAX_SLOTS = 3;
+const TIMES = Array.from({ length: 21 }, (_, i) => `${String(10 + Math.floor(i / 2)).padStart(2, "0")}:${i % 2 ? "30" : "00"}`); // 10:00~20:00
+const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const WEEK = "일월화수목금토";
+const dayText = (date: string) => {
+  const d = new Date(`${date}T00:00`);
+  return `${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEK[d.getDay()]})`;
+};
+
+function FollowUpForm({ row, type, scent, onSaved }: { row: HeartRow; type: string; scent: string | null; onSaved: () => void }) {
+  const saved = row.followup;
+  const [slots, setSlots] = useState(() => (saved?.slots ?? []).map((s) => ({ date: s.slice(0, 10), time: s.slice(11) })));
+  const [phone, setPhone] = useState(saved?.phone ?? "");
+  const [agreed, setAgreed] = useState<boolean | null>(saved ? true : null);
+  const [state, setState] = useState<{ busy?: boolean; error?: string; done?: boolean }>({});
+
+  const toggle = (date: string) =>
+    setSlots((ss) => (ss.some((s) => s.date === date) ? ss.filter((s) => s.date !== date) : ss.length < MAX_SLOTS ? [...ss, { date, time: "" }].sort((a, b) => a.date.localeCompare(b.date)) : ss));
+  const phoneOk = /^0\d{1,2}-?\d{3,4}-?\d{4}$/.test(phone.trim());
+  const ready = slots.length > 0 && slots.every((s) => s.time) && phoneOk && agreed === true;
+
+  const submit = async () => {
+    setState({ busy: true });
+    try {
+      const res = await fetch(`/api/coach/followup?id=${row.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: phone.trim(), slots: slots.map((s) => `${s.date}T${s.time}`), agreed: true }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error);
+      setState({ done: true });
+      onSaved();
+    } catch (e) {
+      setState({ error: (e as Error).message || "신청을 저장하지 못했어요." });
+    }
+  };
+
   return (
-    <section className="mt-10 border-t-2 border-ink pt-6 break-inside-avoid print:break-before-page print:mt-0 print:border-t-0">
-      <p className={LABEL}>후속 프로그램 신청</p>
-      <h3 className="display mt-2 text-[clamp(1.6rem,3vw,2.2rem)] font-normal">정답을 아는 것에서, 나만의 답을 만드는 것으로</h3>
-      <div className="mt-4 flex flex-col gap-3 leading-relaxed">
+    <section className="mt-10 border-t-2 border-ink pt-6 print:break-before-page print:mt-0 print:border-t-0">
+      <p className={LABEL}>툴즈 6회 자기이해 코칭 · 후속 프로그램 신청</p>
+
+      {/* 같은 10, 다른 공식 */}
+      <div className="mt-4 border border-line bg-ivory px-5 py-5 break-inside-avoid">
+        <p className="text-lg">같은 10이라는 답을 얻더라도</p>
+        <ul className="mt-3 grid gap-2 sm:grid-cols-3">
+          {[
+            ["누군가는", "5 + 5"],
+            ["누군가는", "2 × 5"],
+            ["누군가는", "20 ÷ 2"],
+          ].map(([who, f]) => (
+            <li key={f} className="border-t border-line pt-2">
+              <span className="text-sm text-mute">{who}</span>
+              <span className="disp-en ml-2 text-2xl tabular-nums">{f}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-3 text-lg">로 답을 찾습니다.</p>
+      </div>
+
+      <h3 className="display mt-6 text-[clamp(1.6rem,3vw,2.2rem)] font-normal">정답을 아는 것에서, 나만의 답을 만드는 것으로</h3>
+      <div className="mt-4 flex flex-col gap-3 text-lg leading-relaxed">
         <p>
-          AI는 정답을 빠르게 알려 줄 수 있지만, 내가 어떤 경험과 감정, 생각을 거쳐 지금의 내가 되었는지, 앞으로 어떻게 살아가야 할지는 대신
-          정해 줄 수 없어요. 오늘 나온 핵심감정도 결과를 아는 데서 끝나지 않고, 그 감정을 따라가 보는 시간이 필요해요.
+          AI는 우리에게 정답을 빠르게 알려줄 수 있지만, 정작 내가 어떤 경험과 감정, 생각을 거쳐 지금의 내가 되었는지, 그리고 앞으로 어떤 방식으로 살아가야 할지는 대신 결정해 줄
+          수 없어요.
         </p>
-        <ul className="ml-5 list-disc text-mute">
+        <p>
+          오늘 검사에서 나온 핵심감정{type ? <b>({type})</b> : null}도 마찬가지예요. 단순히 내가 어떤 감정을 가지고 있다는 결과를 아는 것에서 끝나는 게 아니라,
+        </p>
+        <ul className="ml-5 list-disc">
           <li>나는 왜 이런 감정을 자주 느끼는지</li>
-          <li>이 감정이 나의 선택과 관계에 어떤 영향을 주는지</li>
+          <li>이런 감정이 나의 선택과 관계에 어떤 영향을 주는지</li>
           <li>내가 진정으로 원하는 삶은 무엇인지</li>
         </ul>
+        <p>이런 것들을 알아가는 과정이 필요하거든요.</p>
         <p>
-          오늘은 나를 표현하는 향{scent ? `(${scent})` : ""}을 만들었다면, 앞으로의 <b>6회 자기이해 코칭</b>은 나라는 사람을 더 깊이 이해하고 나만의 삶의
-          공식을 찾아가는 시간이에요.
+          그래서 툴즈에서는 오늘의 체험을 일회성으로 끝내지 않고, <b>6회의 자기이해 코칭 프로그램</b>으로 이어갈 수 있는 기회를 드려요. 오늘은 나를 표현하는 향
+          {scent ? `(${scent})` : ""}을 만들었다면, 앞으로의 6회는 나라는 사람을 조금 더 깊이 이해하고, 나만의 삶의 공식을 찾아가는 시간이에요.
         </p>
       </div>
 
-      <dl className="mt-6 grid gap-px border border-line bg-line sm:grid-cols-2">
-        <div className="bg-paper px-5 py-4">
-          <dt className="font-bold">첫 회차 일정은 오늘 이 자리에서 정해요</dt>
-          <dd className="mt-1 text-sm text-mute">신청과 함께 첫 만남 날짜를 확정해, 바쁜 일상 속에서도 시작을 놓치지 않게 해요.</dd>
-        </div>
-        <div className="bg-paper px-5 py-4">
-          <dt className="font-bold">첫 회차에 개인별 결과 리포트를 드려요</dt>
-          <dd className="mt-1 text-sm text-mute">오늘의 핵심감정 결과를 더 넓고 깊게 풀어, 6회 동안 이어 갈 나만의 출발점으로 삼아요.</dd>
-        </div>
-      </dl>
+      {/* 오늘 한 것 → 앞으로의 6회 */}
+      <ol className="mt-6 grid gap-px border border-line bg-line sm:grid-cols-4 break-inside-avoid">
+        {[
+          ["STEP 1", "핵심감정 검사", "나의 현재 발견"],
+          ["STEP 2", "소중한 추억 찾기", "나의 경험 발견"],
+          ["STEP 3", "퍼스널 향수 제작", "나를 감각으로 표현"],
+        ].map(([n, t, d]) => (
+          <li key={n} className="bg-paper px-4 py-3">
+            <span className="font-label text-xs tracking-[0.08em] text-mute">{n} · 오늘 완료</span>
+            <span className="mt-1 block font-bold">{t}</span>
+            <span className="block text-sm text-mute">{d}</span>
+          </li>
+        ))}
+        <li className="bg-ink px-4 py-3 text-ivory">
+          <span className="font-label text-xs tracking-[0.08em] text-ivory/70">STEP 4 · 6회 코칭</span>
+          <span className="mt-1 block font-bold">나만의 공식 발견</span>
+          <span className="block text-sm text-ivory/70">향으로 표현하는 것을 넘어, 나를 이해하는 과정으로</span>
+        </li>
+      </ol>
+      <ul className="mt-3 grid gap-2 sm:grid-cols-3">
+        {["핵심감정과 반복되는 행동 패턴 탐색", "나의 생각과 감정의 원인 이해", "나만의 가치관과 삶의 방향 정립"].map((t) => (
+          <li key={t} className="border-l-2 border-gold pl-3">
+            {t}
+          </li>
+        ))}
+      </ul>
 
-      <div className="mt-6 grid gap-x-6 gap-y-4 sm:grid-cols-2">
-        <div>
-          <p className={LABEL}>이름</p>
-          <p className={`${line} flex items-end pb-1 text-lg`}>{name}</p>
+      <p className="display mt-8 text-center text-[clamp(1.3rem,2.4vw,1.7rem)] leading-snug font-normal">
+        정답을 아는 것에서 끝나지 않고, 나만의 답을 만들어 가는 것.
+        <br />
+        이번 기회에 나 자신을 알아가는 6번의 시간을 경험해 보시는 건 어떠세요?
+      </p>
+
+      {/* 신청: 패드에서 직접 */}
+      <div className="mt-8 border border-ink bg-paper px-5 py-5">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h3 className="text-xl font-bold">6회 자기이해 코칭 신청</h3>
+          {saved && <span className="bg-ink px-2 py-0.5 font-label text-xs tracking-[0.08em] text-ivory">신청됨 · {new Date(saved.at).toLocaleString("ko-KR")}</span>}
         </div>
-        <div>
-          <p className={LABEL}>연락처</p>
-          <p className={line} />
+
+        <div className="mt-5 grid gap-x-6 gap-y-4 sm:grid-cols-2">
+          <div>
+            <p className={LABEL}>이름</p>
+            <p className="mt-1 border-b border-ink pb-2 text-lg">{row.name}</p>
+          </div>
+          <div>
+            <label htmlFor="fu-phone" className={LABEL}>
+              연락처
+            </label>
+            <input id="fu-phone" value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" autoComplete="off" maxLength={13} placeholder="010-0000-0000" className="field mt-1 !text-lg" />
+          </div>
         </div>
-        <div className="sm:col-span-2">
-          <p className={LABEL}>첫 회차 일정</p>
-          <p className={`${line} flex items-end gap-6 pb-1 text-mute`}>
-            <span>　　월　　일 (　　)</span>
-            <span>　　시　　분</span>
+
+        <p className={`${LABEL} mt-6`}>
+          희망 일정 · 달력에서 가능한 날을 {MAX_SLOTS}개까지 누르고 시간을 골라 주세요 ({slots.length}/{MAX_SLOTS})
+        </p>
+        <div className="mt-2 grid gap-5 lg:grid-cols-[minmax(0,22rem)_1fr]">
+          <Calendar picked={slots.map((s) => s.date)} full={slots.length >= MAX_SLOTS} onToggle={toggle} />
+          <ol className="flex flex-col gap-2">
+            {slots.map((s, i) => (
+              <li key={s.date} className="flex flex-wrap items-center gap-3 border border-line px-4 py-3">
+                <span className="disp-en text-xl text-gold">{i + 1}</span>
+                <span className="min-w-36 text-lg font-bold">{dayText(s.date)}</span>
+                <label className="sr-only" htmlFor={`fu-t-${s.date}`}>
+                  {dayText(s.date)} 시간
+                </label>
+                <select
+                  id={`fu-t-${s.date}`}
+                  value={s.time}
+                  onChange={(e) => setSlots((ss) => ss.map((x) => (x.date === s.date ? { ...x, time: e.target.value } : x)))}
+                  className={`field !w-auto min-h-11 !py-2 !text-lg ${s.time ? "" : "!border-gold"}`}
+                >
+                  <option value="">시간 선택</option>
+                  {TIMES.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+                <button type="button" className="btn-text ml-auto print:hidden" onClick={() => toggle(s.date)}>
+                  빼기
+                </button>
+              </li>
+            ))}
+            {slots.length === 0 && <li className="border border-dashed border-line px-4 py-6 text-center text-mute">아직 고른 날이 없어요.</li>}
+          </ol>
+        </div>
+
+        <div className="mt-6 border-t border-line pt-5">
+          <p className="font-bold">신청 시 주의사항</p>
+          <p className="mt-1 leading-relaxed">
+            프로그램은 신청 인원에 맞춰 저희가 비용을 미리 지불하고 준비해요. 예약한 일정에 꼭 참석해 주시고, 부득이한 사정이 생기면 미리 알려 주세요. 함께하는 시간을 위해
+            책임감 있게 참여해 주시면 감사하겠습니다.
           </p>
+          <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-lg">
+            <span id="fu-agree">위 신청 시 주의사항 안내를 받았습니다.</span>
+            <div role="radiogroup" aria-labelledby="fu-agree" className="grid w-40 grid-cols-2 border border-line">
+              {(["Y", "N"] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  role="radio"
+                  aria-checked={agreed === (v === "Y")}
+                  onClick={() => setAgreed(v === "Y")}
+                  className={`min-h-12 font-bold ${agreed === (v === "Y") ? "bg-ink text-ivory" : "bg-paper text-mute"}`}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+          </div>
+          {agreed === false && <p className="mt-2 text-gold">주의사항에 동의해야 신청할 수 있어요.</p>}
+        </div>
+
+        <div className="mt-6 flex flex-wrap items-center justify-end gap-4 print:hidden">
+          {state.error && <p className="mr-auto text-gold">{state.error}</p>}
+          {state.done && <p className="mr-auto">✓ 신청이 저장됐어요.</p>}
+          {!ready && !state.error && !state.done && (
+            <p className="mr-auto text-sm text-mute">{!phoneOk ? "연락처를 적어 주세요." : slots.length === 0 ? "희망 날짜를 골라 주세요." : slots.some((s) => !s.time) ? "고른 날마다 시간을 골라 주세요." : "주의사항 안내에 Y를 눌러 주세요."}</p>
+          )}
+          <button type="button" className="btn-main min-h-14 px-8 text-lg" disabled={!ready || state.busy} onClick={submit}>
+            {state.busy ? "저장 중…" : saved ? "신청 내용 고치기" : "신청하기"}
+          </button>
         </div>
       </div>
-
-      <div className="mt-6 border border-ink px-5 py-4">
-        <p className="font-bold">신청 시 주의사항</p>
-        <p className="mt-1 leading-relaxed">
-          프로그램은 신청 인원에 맞춰 저희가 비용을 미리 지불하고 준비해요. 예약한 일정에 꼭 참석해 주시고, 부득이한 사정이 생기면 미리 알려
-          주세요. 함께하는 시간을 위해 책임감 있게 참여해 주시면 감사하겠습니다.
-        </p>
-      </div>
-
-      <p className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 text-lg">
-        <span>위 신청 시 주의사항 안내를 받았습니다.</span>
-        <span className="flex gap-5 font-bold">
-          <span>□ Y</span>
-          <span>□ N</span>
-        </span>
-      </p>
-      <p className="mt-6 flex justify-end gap-3 text-lg">
-        <span>신청인</span>
-        <span className="w-40 border-b border-ink" />
-        <span className="text-mute">(서명)</span>
-      </p>
     </section>
+  );
+}
+
+// 패드에서 손가락으로 누르기 좋은 달력. 오늘 이전은 막고, 다 고르면 고른 날만 다시 눌러 뺄 수 있다
+function Calendar({ picked, full, onToggle }: { picked: string[]; full: boolean; onToggle: (date: string) => void }) {
+  const [month, setMonth] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+  const today = ymd(new Date());
+  const y = month.getFullYear();
+  const m = month.getMonth();
+  const cells = [...Array<null>(month.getDay()).fill(null), ...Array.from({ length: new Date(y, m + 1, 0).getDate() }, (_, i) => ymd(new Date(y, m, i + 1)))];
+  const isThisMonth = ymd(month).slice(0, 7) === today.slice(0, 7);
+
+  return (
+    <div className="border border-line print:hidden">
+      <div className="flex items-center justify-between border-b border-line px-2">
+        <button type="button" className="btn-text min-h-12 px-4 disabled:opacity-30" disabled={isThisMonth} onClick={() => setMonth(new Date(y, m - 1, 1))} aria-label="이전 달">
+          ‹
+        </button>
+        <span className="text-lg font-bold">
+          {y}년 {m + 1}월
+        </span>
+        <button type="button" className="btn-text min-h-12 px-4" onClick={() => setMonth(new Date(y, m + 1, 1))} aria-label="다음 달">
+          ›
+        </button>
+      </div>
+      <div className="grid grid-cols-7 text-center">
+        {[...WEEK].map((w, i) => (
+          <span key={w} className={`py-1.5 font-label text-xs ${i === 0 ? "text-gold" : "text-mute"}`}>
+            {w}
+          </span>
+        ))}
+        {cells.map((d, i) => {
+          if (!d) return <span key={`e${i}`} />;
+          const on = picked.includes(d);
+          const off = d < today || (full && !on);
+          return (
+            <button
+              key={d}
+              type="button"
+              aria-pressed={on}
+              aria-label={dayText(d)}
+              disabled={off}
+              onClick={() => onToggle(d)}
+              className={`m-0.5 min-h-12 text-lg tabular-nums transition-colors ${on ? "bg-ink font-bold text-ivory" : off ? "text-line" : "hover:bg-cream/60"} ${d === today && !on ? "underline underline-offset-4" : ""}`}
+            >
+              {Number(d.slice(8))}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }

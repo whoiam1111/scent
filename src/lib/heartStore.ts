@@ -7,7 +7,9 @@ import { randomInt } from "node:crypto";
 // keyring_at: 키링 이미지가 들어온 시각. 이미지 자체는 무거워서 목록에 싣지 않고 getKeyring으로 따로 받는다
 // scent: 참가자 화면에 보여 준 향 조합 그대로 (조향사용). 나중에 조합표가 바뀌어도 그날 추천한 향이 남는다
 export type SavedScent = { type: string; top: string; middle: string; base: string };
-export type HeartRow = { id: string; code: string; name: string; checks: string[]; created_at: string; keyring_at?: string | null; scent?: SavedScent | null };
+// followup: 6회 코칭 신청 (코칭존 패드에서 받는다). slots는 희망 일정 "YYYY-MM-DDTHH:mm" (현지 시각)
+export type FollowUp = { phone: string; slots: string[]; agreed: true; at: string };
+export type HeartRow = { id: string; code: string; name: string; checks: string[]; created_at: string; keyring_at?: string | null; scent?: SavedScent | null; followup?: FollowUp | null };
 type MemRow = HeartRow & { keyring?: Buffer };
 
 // 대시보드에서 REST 주소(…/rest/v1/)를 통째로 복사해 넣는 경우가 많아 프로젝트 주소만 남긴다
@@ -97,6 +99,17 @@ export async function getKeyring(id: string): Promise<Buffer | null> {
   if (!remote) return mem.find((r) => r.id === id)?.keyring ?? null;
   const res = await storage(`authenticated/${BUCKET}/${objectPath(id)}`);
   return res.ok ? Buffer.from(await res.arrayBuffer()) : null;
+}
+
+// 코칭 신청을 결과에 붙인다. 다시 신청하면 덮어쓴다. 해당 결과가 없으면 false
+export async function saveFollowUp(id: string, followup: FollowUp): Promise<boolean> {
+  if (!remote) {
+    const row = mem.find((r) => r.id === id);
+    if (row) row.followup = followup;
+    return Boolean(row);
+  }
+  const rows: unknown[] = await rest(`?id=eq.${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ followup }) });
+  return rows.length > 0;
 }
 
 export async function deleteHeart(id: string) {
