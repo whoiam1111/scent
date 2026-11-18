@@ -18,6 +18,7 @@ export async function DELETE(req: Request) {
   const id = new URL(req.url).searchParams.get("id") ?? "";
   if (!/^[0-9a-f-]{36}$/i.test(id)) return Response.json({ error: "잘못된 요청" }, { status: 400 });
   await deleteHeart(id);
-  after(syncTelegram); // 지운 사람을 텔레그램 누적에서도 뺀다
+  // 지운 사람을 텔레그램 누적에서도 뺀다. shortcut: 오늘 메시지만 다시 맞춘다 (지난날 참가자를 지우면 그날 메시지에 남는다)
+  after(() => syncTelegram());
   return Response.json({ ok: true });
 }

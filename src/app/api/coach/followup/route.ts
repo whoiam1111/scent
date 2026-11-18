@@ -1,7 +1,7 @@
 import { after } from "next/server";
 import { z } from "zod";
 import { saveFollowUp, type FollowUp } from "@/lib/heartStore";
-import { syncTelegram } from "@/lib/telegram";
+import { kstDay, syncTelegram } from "@/lib/telegram";
 
 // 상담사 전용 (src/proxy.ts가 비밀번호로 막는다). 코칭존 패드에서 받은 후속 프로그램 신청을 저장하고,
 // 텔레그램 누적 메시지를 고친다 (src/lib/telegram.ts).
@@ -52,7 +52,7 @@ export async function POST(req: Request) {
     };
     const row = await saveFollowUp(id, followup);
     if (!row) return Response.json({ error: "참가자 결과를 찾지 못했어요." }, { status: 404 });
-    after(syncTelegram); // 패드가 텔레그램을 기다리지 않게
+    after(() => syncTelegram(kstDay(row.created_at))); // 체험한 날의 메시지를 고친다. 패드는 기다리지 않는다
     return Response.json({ ok: true });
   } catch (e) {
     console.error("followup save failed", (e as Error).message);

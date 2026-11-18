@@ -1,5 +1,5 @@
-import { scoreHeart } from "@/lib/heart";
-import { getTelegramIds, listHeart, setTelegramIds, type HeartRow } from "@/lib/heartStore";
+import { scoreHeart } from '@/lib/heart';
+import { getTelegramIds, listHeart, setTelegramIds, type HeartRow } from '@/lib/heartStore';
 
 // 코칭존 신청을 누적 양식 그대로 텔레그램 방에 쌓는다 (서버 전용). TELEGRAM_BOT_TOKEN·TELEGRAM_CHAT_ID가 없으면 아무것도 안 한다.
 // 하루(한국 시각)에 메시지 하나: 신청이 들어올 때마다 그날 신청 전체를 DB에서 다시 모아 그 메시지를 고친다.
@@ -19,81 +19,102 @@ const HEAD = `구분 : 향수행사
 섭외자/성별/생년월일/연락처/인도자지역/인도자/인터뷰자/다음 만남예정일, 장소/간단정보`;
 
 const PROGRAM = {
-  coaching: "01 핵심감정 노트(1:1 감정 코칭) 신청",
-  reading: "02 센트 레이어링(북토크) 신청",
-  interview: "03 시그니처 프로젝트(숏 인터뷰) 신청",
-  none: "신청 안 함 · 연락처만",
-  declined: "연락처 안 남김",
+    coaching: '01 핵심감정 노트(1:1 감정 코칭) 신청',
+    reading: '02 센트 레이어링(북토크) 신청',
+    interview: '03 시그니처 프로젝트(숏 인터뷰) 신청',
+    none: '신청 안 함 · 연락처만',
+    declined: '연락처 안 남김',
 } as const;
-const WEEK = "일월화수목금토";
-const slotText = (s: string) => `${+s.slice(5, 7)}.${+s.slice(8, 10)}(${WEEK[new Date(`${s.slice(0, 10)}T00:00Z`).getUTCDay()]}) ${s.slice(11)}`;
-const kstDay = (iso: string) => new Date(new Date(iso).getTime() + 9 * 3_600_000).toISOString().slice(0, 10);
+const WEEK = '일월화수목금토';
+const slotText = (s: string) =>
+    `${+s.slice(5, 7)}.${+s.slice(8, 10)}(${WEEK[new Date(`${s.slice(0, 10)}T00:00Z`).getUTCDay()]}) ${s.slice(11)}`;
+export const kstDay = (iso: string) => new Date(new Date(iso).getTime() + 9 * 3_600_000).toISOString().slice(0, 10);
 const LIMIT = 4000; // 텔레그램 메시지 한 개 4096자
 
 // 섭외자/성별/생년월일/연락처/인도자지역/인도자/인터뷰자/다음 만남예정일, 장소/간단정보
 // 연락처는 뒷자리 4개만, 모르는 칸은 비워 두고 나중에 채운다
 export function entryLine(row: HeartRow) {
-  const f = row.followup!;
-  const top = scoreHeart(new Set(row.checks));
-  const emotion = top.filter((x) => x.ratio === top[0].ratio && x.ratio > 0).map((x) => x.type.name).join("·");
-  return [
-    row.name,
-    f.gender ?? "",
-    f.birth?.replaceAll("-", "").slice(2) ?? "",
-    f.phone.replace(/\D/g, "").slice(-4),
-    "",
-    "",
-    "",
-    f.slots.map(slotText).join(", "),
-    [emotion && `핵심감정 ${emotion}`, PROGRAM[f.program ?? "coaching"], f.concern && `고민·관심사 ${f.concern}`].filter(Boolean).join(" · "),
-  ].join("/");
+    const f = row.followup!;
+    const top = scoreHeart(new Set(row.checks));
+    const emotion = top
+        .filter((x) => x.ratio === top[0].ratio && x.ratio > 0)
+        .map((x) => x.type.name)
+        .join('·');
+    return [
+        row.name,
+        f.gender ?? '',
+        f.birth?.replaceAll('-', '').slice(2) ?? '',
+        f.phone.replace(/\D/g, '').slice(-4),
+        '',
+        '',
+        '',
+        f.slots.map(slotText).join(', '),
+        [emotion && `핵심감정 ${emotion}`, PROGRAM[f.program ?? 'coaching'], f.concern && `고민·관심사 ${f.concern}`]
+            .filter(Boolean)
+            .join(' · '),
+    ].join('/');
 }
 
 // 양식 전체를 만들고, 길면 줄 단위로 나눈다
 export function boardTexts(rows: HeartRow[]) {
-  const group = (r: HeartRow) => ({ none: "보류", declined: "X" })[r.followup!.program as string] ?? "O";
-  const pick = (g: string) => rows.filter((r) => group(r) === g).map(entryLine);
-  const lines = [...HEAD.split("\n"), "", "▪️후속연결O", ...pick("O"), "", "▪️후속연결 보류", ...pick("보류"), "", "▪️후속연결 X", ...pick("X")];
-  const out = [""];
-  for (const l of lines) {
-    if (out[out.length - 1].length + l.length + 1 > LIMIT) out.push("");
-    out[out.length - 1] += (out[out.length - 1] ? "\n" : "") + l;
-  }
-  return out;
+    const group = (r: HeartRow) => ({ none: '보류', declined: 'X' })[r.followup!.program as string] ?? 'O';
+    const pick = (g: string) => rows.filter((r) => group(r) === g).map(entryLine);
+    const lines = [
+        ...HEAD.split('\n'),
+        '',
+        '▪️후속연결O',
+        ...pick('O'),
+        '',
+        '▪️후속연결 보류',
+        ...pick('보류'),
+        '',
+        '▪️후속연결 X',
+        ...pick('X'),
+    ];
+    const out = [''];
+    for (const l of lines) {
+        if (out[out.length - 1].length + l.length + 1 > LIMIT) out.push('');
+        out[out.length - 1] += (out[out.length - 1] ? '\n' : '') + l;
+    }
+    return out;
 }
 
 async function tg(method: string, body: object) {
-  const res = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/${method}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: process.env.TELEGRAM_CHAT_ID, ...body }),
-  });
-  return (await res.json()) as { ok: boolean; description?: string; result?: { message_id: number } };
+    const res = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/${method}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: process.env.TELEGRAM_CHAT_ID, ...body }),
+    });
+    return (await res.json()) as { ok: boolean; description?: string; result?: { message_id: number } };
 }
 
-export async function syncTelegram() {
-  if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.TELEGRAM_CHAT_ID) return;
-  try {
-    const day = kstDay(new Date().toISOString());
-    const rows = (await listHeart()).filter((r) => r.followup && kstDay(r.created_at) === day).sort((a, b) => a.created_at.localeCompare(b.created_at));
-    const texts = boardTexts(rows);
-    // 메시지 번호 표(telegram_logs)가 없으면 매번 새 메시지로라도 보낸다
-    const ids = await getTelegramIds(day).catch((e) => (console.error("telegram ids", (e as Error).message), [] as number[]));
-    const next: number[] = [];
-    for (const [i, text] of texts.entries()) {
-      if (ids[i]) {
-        const r = await tg("editMessageText", { message_id: ids[i], text });
-        if (r.ok || r.description?.includes("not modified")) {
-          next.push(ids[i]);
-          continue;
+// day: 고칠 날의 메시지 (참가자가 체험한 날, 한국 시각). 기본은 오늘
+export async function syncTelegram(day = kstDay(new Date().toISOString())) {
+    if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.TELEGRAM_CHAT_ID) return;
+    try {
+        const rows = (await listHeart())
+            .filter((r) => r.followup && kstDay(r.created_at) === day)
+            .sort((a, b) => a.created_at.localeCompare(b.created_at));
+        const texts = boardTexts(rows);
+        // 메시지 번호 표(telegram_logs)가 없으면 매번 새 메시지로라도 보낸다
+        const ids = await getTelegramIds(day).catch(
+            (e) => (console.error('telegram ids', (e as Error).message), [] as number[]),
+        );
+        const next: number[] = [];
+        for (const [i, text] of texts.entries()) {
+            if (ids[i]) {
+                const r = await tg('editMessageText', { message_id: ids[i], text });
+                if (r.ok || r.description?.includes('not modified')) {
+                    next.push(ids[i]);
+                    continue;
+                }
+            }
+            const r = await tg('sendMessage', { text }); // 처음이거나, 지워진 메시지면 새로
+            if (!r.ok) throw new Error(r.description);
+            next.push(r.result!.message_id);
         }
-      }
-      const r = await tg("sendMessage", { text }); // 처음이거나, 지워진 메시지면 새로
-      if (!r.ok) throw new Error(r.description);
-      next.push(r.result!.message_id);
+        if (next.join() !== ids.join()) await setTelegramIds(day, next);
+    } catch (e) {
+        console.error('telegram failed', (e as Error).message);
     }
-    if (next.join() !== ids.join()) await setTelegramIds(day, next);
-  } catch (e) {
-    console.error("telegram failed", (e as Error).message);
-  }
 }

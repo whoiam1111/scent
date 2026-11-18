@@ -435,7 +435,13 @@ function Sheet({
 
 // 후속지: 툴즈 6회 자기이해 코칭 신청. 코칭존 패드에서 참가자가 직접 희망 일정을 달력에서 골라 신청한다
 const MAX_SLOTS = 3;
-const BADGE: Record<Program, string> = { coaching: '감정 코칭', reading: '북토크', interview: '숏 인터뷰', none: '연락처만', declined: '후속 X' };
+const BADGE: Record<Program, string> = {
+    coaching: '감정 코칭',
+    reading: '북토크',
+    interview: '숏 인터뷰',
+    none: '연락처만',
+    declined: '신청 X',
+};
 // 신청할 수 있는 프로그램 셋. 예전 id(coaching·reading)를 그대로 써서 이미 받은 신청도 맞게 보인다
 const PROGRAMS: [Program, string, string, string, string][] = [
     [
@@ -523,7 +529,7 @@ function FollowUpForm({
     const ready = slotsOk && phoneOk && birthOk && gender !== null && (program === 'none' || agreed === true);
 
     const submit = async (decline = false) => {
-        if (decline && !confirm(`${row.name}님을 '후속연결 X'(연락처 안 남김)로 저장할까요?`)) return;
+        if (decline && !confirm(`${row.name}님을 '신청 X'(연락처 안 남김)로 저장할까요?`)) return;
         setState({ busy: true });
         try {
             const res = await fetch(`/api/coach/followup?id=${row.id}`, {
@@ -554,7 +560,7 @@ function FollowUpForm({
 
     return (
         <section className="mt-10 border-t-2 border-ink pt-6 print:break-before-page print:mt-0 print:border-t-0">
-            <p className={LABEL}>툴즈 6회 자기이해 코칭 · 후속 프로그램 신청</p>
+            <p className={LABEL}>툴즈 6회 자기이해 코칭 · 프로그램 신청</p>
 
             {/* 같은 10, 다른 공식 */}
             <div className="mt-4 border border-line bg-ivory px-5 py-5 break-inside-avoid">
@@ -646,15 +652,19 @@ function FollowUpForm({
             {/* 신청: 패드에서 직접 */}
             <div className="mt-8 border border-ink bg-paper px-5 py-5">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <h3 className="text-xl font-bold">후속 프로그램 신청</h3>
+                    <h3 className="text-xl font-bold"> 프로그램 신청</h3>
                     {saved && (
                         <span className="bg-ink px-2 py-0.5 font-label text-xs tracking-[0.08em] text-ivory">
                             신청됨 · {new Date(saved.at).toLocaleString('ko-KR')}
                         </span>
                     )}
                     {declined && (
-                        <span className="border border-gold px-2 py-0.5 font-label text-xs tracking-[0.08em] text-gold">
-                            후속연결 X로 저장됨 · {new Date(declined.at).toLocaleString('ko-KR')}
+                        <span
+                            className="text-sm text-line"
+                            title={`신청 X · ${new Date(declined.at).toLocaleString('ko-KR')}`}
+                            aria-label="신청 X"
+                        >
+                            ✕
                         </span>
                     )}
                 </div>
@@ -670,10 +680,16 @@ function FollowUpForm({
                                 onClick={() => setProgram(id)}
                                 className={`flex flex-col px-5 py-4 text-left ${program === id ? 'bg-ink text-ivory' : 'bg-paper'}`}
                             >
-                                <span className={`disp-en text-xl ${program === id ? 'text-gold-light' : 'text-gold'}`}>{n}</span>
+                                <span className={`disp-en text-xl ${program === id ? 'text-gold-light' : 'text-gold'}`}>
+                                    {n}
+                                </span>
                                 <span className="mt-1 block text-lg leading-snug font-bold">{t}</span>
-                                <span className={`block font-bold ${program === id ? 'text-ivory/80' : 'text-mute'}`}>{sub}</span>
-                                <span className={`mt-2 block text-sm leading-relaxed ${program === id ? 'text-ivory/70' : 'text-mute'}`}>
+                                <span className={`block font-bold ${program === id ? 'text-ivory/80' : 'text-mute'}`}>
+                                    {sub}
+                                </span>
+                                <span
+                                    className={`mt-2 block text-sm leading-relaxed ${program === id ? 'text-ivory/70' : 'text-mute'}`}
+                                >
                                     {d}
                                 </span>
                             </button>
@@ -728,7 +744,11 @@ function FollowUpForm({
                         <p id="fu-gender" className={LABEL}>
                             성별
                         </p>
-                        <div role="radiogroup" aria-labelledby="fu-gender" className="mt-1 grid grid-cols-2 border border-line">
+                        <div
+                            role="radiogroup"
+                            aria-labelledby="fu-gender"
+                            className="mt-1 grid grid-cols-2 border border-line"
+                        >
                             {(['남', '여'] as const).map((g) => (
                                 <button
                                     key={g}
@@ -761,8 +781,8 @@ function FollowUpForm({
 
                 {program === 'none' ? (
                     <p className="mt-6 border-l-2 border-gold py-1 pl-4 leading-relaxed">
-                        지금 신청하지 않아도 괜찮아요. 연락처를 남겨 주시면 다음 프로그램과 생일 이벤트 소식을
-                        알려 드려요.
+                        지금 신청하지 않아도 괜찮아요. 연락처를 남겨 주시면 다음 프로그램과 생일 이벤트 소식을 알려
+                        드려요.
                     </p>
                 ) : program === 'reading' ? (
                     <p className="mt-6 border-l-2 border-gold py-1 pl-4 leading-relaxed">
@@ -830,36 +850,36 @@ function FollowUpForm({
                 )}
 
                 {program !== 'none' && (
-                <div className="mt-6 border-t border-line pt-5">
-                    <p className="font-bold">신청 시 주의사항</p>
-                    <p className="mt-1 leading-relaxed">
-                        프로그램은 신청 인원에 맞춰 저희가 비용을 미리 지불하고 준비합니다. 예약한 일정에 꼭 참석해
-                        주시고, 부득이한 사정이 생기면 미리 알려 주시면 감사합니다. 함께하는 시간을 위해 책임감 있게
-                        참여해 주시면 감사하겠습니다.
-                    </p>
-                    <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-lg">
-                        <span id="fu-agree">위 신청 시 주의사항 안내를 받았습니다.</span>
-                        <div
-                            role="radiogroup"
-                            aria-labelledby="fu-agree"
-                            className="grid w-40 grid-cols-2 border border-line"
-                        >
-                            {(['Y', 'N'] as const).map((v) => (
-                                <button
-                                    key={v}
-                                    type="button"
-                                    role="radio"
-                                    aria-checked={agreed === (v === 'Y')}
-                                    onClick={() => setAgreed(v === 'Y')}
-                                    className={`min-h-12 font-bold ${agreed === (v === 'Y') ? 'bg-ink text-ivory' : 'bg-paper text-mute'}`}
-                                >
-                                    {v}
-                                </button>
-                            ))}
+                    <div className="mt-6 border-t border-line pt-5">
+                        <p className="font-bold">신청 시 주의사항</p>
+                        <p className="mt-1 leading-relaxed">
+                            프로그램은 신청 인원에 맞춰 저희가 비용을 미리 지불하고 준비합니다. 예약한 일정에 꼭 참석해
+                            주시고, 부득이한 사정이 생기면 미리 알려 주시면 감사합니다. 함께하는 시간을 위해 책임감 있게
+                            참여해 주시면 감사하겠습니다.
+                        </p>
+                        <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-lg">
+                            <span id="fu-agree">위 신청 시 주의사항 안내를 받았습니다.</span>
+                            <div
+                                role="radiogroup"
+                                aria-labelledby="fu-agree"
+                                className="grid w-40 grid-cols-2 border border-line"
+                            >
+                                {(['Y', 'N'] as const).map((v) => (
+                                    <button
+                                        key={v}
+                                        type="button"
+                                        role="radio"
+                                        aria-checked={agreed === (v === 'Y')}
+                                        onClick={() => setAgreed(v === 'Y')}
+                                        className={`min-h-12 font-bold ${agreed === (v === 'Y') ? 'bg-ink text-ivory' : 'bg-paper text-mute'}`}
+                                    >
+                                        {v}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
+                        {agreed === false && <p className="mt-2 text-gold">주의사항에 동의해야 신청할 수 있어요.</p>}
                     </div>
-                    {agreed === false && <p className="mt-2 text-gold">주의사항에 동의해야 신청할 수 있어요.</p>}
-                </div>
                 )}
 
                 <p className="mt-5 text-sm text-mute">
@@ -876,12 +896,12 @@ function FollowUpForm({
                                 : !birthOk
                                   ? '생년월일 8자리를 적어 주세요. (예: 19990101)'
                                   : gender === null
-                                  ? '성별을 골라 주세요.'
-                                  : !slotsOk
-                                  ? slots.length === 0
-                                      ? '희망 날짜를 골라 주세요.'
-                                      : '고른 날마다 시간을 골라 주세요.'
-                                  : '주의사항 안내에 Y를 눌러 주세요.'}
+                                    ? '성별을 골라 주세요.'
+                                    : !slotsOk
+                                      ? slots.length === 0
+                                          ? '희망 날짜를 골라 주세요.'
+                                          : '고른 날마다 시간을 골라 주세요.'
+                                      : '주의사항 안내에 Y를 눌러 주세요.'}
                         </p>
                     )}
                     <button
@@ -890,22 +910,30 @@ function FollowUpForm({
                         disabled={!ready || state.busy}
                         onClick={() => submit()}
                     >
-                        {state.busy ? '저장 중…' : saved ? '신청 내용 고치기' : program === 'none' ? '연락처 남기기' : '신청하기'}
+                        {state.busy
+                            ? '저장 중…'
+                            : saved
+                              ? '신청 내용 고치기'
+                              : program === 'none'
+                                ? '연락처 남기기'
+                                : '신청하기'}
                     </button>
                 </div>
             </div>
 
             {/* 담당자용: 참가자가 신청도, 연락처도 원하지 않을 때 */}
             {!declined && (
-                <div className="mt-4 flex flex-wrap items-center justify-end gap-3 print:hidden">
-                    <span className="text-sm text-mute">담당자 · 참가자가 아무것도 남기지 않겠다고 하면</span>
+                <div className="mt-2 flex justify-end print:hidden">
+                    {/* 참가자 앞이라 글자 없이 아이콘만. 누르면 확인 창이 뜬다 */}
                     <button
                         type="button"
-                        className="btn-soft min-h-12 border-gold px-4 text-sm text-gold"
+                        aria-label="신청 X (담당자)"
+                        title="신청 X (담당자)"
+                        className="grid size-11 place-items-center text-xl text-line hover:text-mute"
                         disabled={state.busy}
                         onClick={() => submit(true)}
                     >
-                        후속연결 X로 저장
+                        ⋯
                     </button>
                 </div>
             )}
