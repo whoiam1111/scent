@@ -9,8 +9,9 @@ import { randomInt } from "node:crypto";
 export type SavedScent = { type: string; top: string; middle: string; base: string };
 // followup: 후속 프로그램 신청 (코칭존 패드에서 받는다). program이 없으면 예전 신청 = 코칭
 // slots는 코칭 희망 일정 "YYYY-MM-DDTHH:mm" (현지 시각), 그 밖에는 빈 배열. none = 신청은 안 하고 연락처만
+// declined = 연락처도 안 남김 (담당자가 눌러 기록, phone은 빈 문자열)
 // birth: 생년월일 "YYYY-MM-DD" (생일 이벤트). agreed: 신청 주의사항 안내 확인 (none은 false)
-export type Program = "coaching" | "reading" | "none";
+export type Program = "coaching" | "reading" | "none" | "declined";
 export type FollowUp = { program?: Program; phone: string; birth?: string; slots: string[]; agreed: boolean; at: string };
 export type HeartRow = { id: string; code: string; name: string; checks: string[]; created_at: string; keyring_at?: string | null; scent?: SavedScent | null; followup?: FollowUp | null };
 type MemRow = HeartRow & { keyring?: Buffer };

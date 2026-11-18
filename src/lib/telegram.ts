@@ -18,7 +18,7 @@ const HEAD = `구분 : 향수행사
 ✔️ 당터뷰 후 바로 누적
 섭외자/성별/생년월일/연락처/인도자지역/인도자/인터뷰자/다음 만남예정일, 장소/간단정보`;
 
-const PROGRAM = { coaching: "6회 코칭 신청", reading: "독서 인문학 강의 신청", none: "신청 안 함 · 연락처만" } as const;
+const PROGRAM = { coaching: "6회 코칭 신청", reading: "독서 인문학 강의 신청", none: "신청 안 함 · 연락처만", declined: "연락처 안 남김" } as const;
 const WEEK = "일월화수목금토";
 const slotText = (s: string) => `${+s.slice(5, 7)}.${+s.slice(8, 10)}(${WEEK[new Date(`${s.slice(0, 10)}T00:00Z`).getUTCDay()]}) ${s.slice(11)}`;
 const kstDay = (iso: string) => new Date(new Date(iso).getTime() + 9 * 3_600_000).toISOString().slice(0, 10);
@@ -45,8 +45,9 @@ export function entryLine(row: HeartRow) {
 
 // 양식 전체를 만들고, 길면 줄 단위로 나눈다
 export function boardTexts(rows: HeartRow[]) {
-  const pick = (none: boolean) => rows.filter((r) => (r.followup!.program === "none") === none).map(entryLine);
-  const lines = [...HEAD.split("\n"), "", "▪️후속연결O", ...pick(false), "", "▪️후속연결 보류", ...pick(true), "", "▪️후속연결 X"];
+  const group = (r: HeartRow) => ({ none: "보류", declined: "X" })[r.followup!.program as string] ?? "O";
+  const pick = (g: string) => rows.filter((r) => group(r) === g).map(entryLine);
+  const lines = [...HEAD.split("\n"), "", "▪️후속연결O", ...pick("O"), "", "▪️후속연결 보류", ...pick("보류"), "", "▪️후속연결 X", ...pick("X")];
   const out = [""];
   for (const l of lines) {
     if (out[out.length - 1].length + l.length + 1 > LIMIT) out.push("");

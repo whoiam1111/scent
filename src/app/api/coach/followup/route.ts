@@ -19,6 +19,8 @@ const Body = z.discriminatedUnion("program", [
   z.object({ program: z.literal("reading"), phone, birth, agreed: z.literal(true) }),
   // 신청은 안 하고 연락처만 남긴다
   z.object({ program: z.literal("none"), phone, birth }),
+  // 아무것도 원하지 않음: 참가자가 아니라 담당자가 눌러 기록한다 (후속연결 X)
+  z.object({ program: z.literal("declined") }),
 ]);
 
 export async function POST(req: Request) {
@@ -30,10 +32,10 @@ export async function POST(req: Request) {
     const d = parsed.data;
     const followup: FollowUp = {
       program: d.program,
-      phone: d.phone,
-      birth: d.birth,
+      phone: d.program === "declined" ? "" : d.phone,
+      birth: d.program === "declined" ? undefined : d.birth,
       slots: d.program === "coaching" ? [...new Set(d.slots)].sort() : [],
-      agreed: d.program !== "none",
+      agreed: d.program === "coaching" || d.program === "reading",
       at: new Date().toISOString(),
     };
     const row = await saveFollowUp(id, followup);

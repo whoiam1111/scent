@@ -185,7 +185,7 @@ export default function Coach() {
                                                     <span
                                                         className={`px-2 ${r.followup ? 'bg-ink text-ivory' : 'invisible'}`}
                                                     >
-                                                        {r.followup?.program === 'reading' ? '독서 신청' : r.followup?.program === 'none' ? '연락처만' : '코칭 신청'}
+                                                        {BADGE[r.followup?.program ?? 'coaching']}
                                                     </span>
                                                     <span
                                                         className={`px-2 ${r.keyring_at ? 'bg-apricot text-gold' : 'invisible'}`}
@@ -435,6 +435,7 @@ function Sheet({
 
 // 후속지: 툴즈 6회 자기이해 코칭 신청. 코칭존 패드에서 참가자가 직접 희망 일정을 달력에서 골라 신청한다
 const MAX_SLOTS = 3;
+const BADGE: Record<Program, string> = { coaching: '코칭 신청', reading: '독서 신청', none: '연락처만', declined: '후속 X' };
 const KITS = [
     ['6도형 검사', '심층 성향 파악'],
     ['인생그래프', '삶의 궤적 시각화'],
@@ -466,7 +467,9 @@ function FollowUpForm({
     scent: string | null;
     onSaved: () => void;
 }) {
-    const saved = row.followup;
+    // 담당자가 '후속연결 X'로 기록한 것은 신청이 아니라서, 신청지는 빈 상태로 둔다
+    const declined = row.followup?.program === 'declined' ? row.followup : null;
+    const saved = declined ? null : row.followup;
     const [slots, setSlots] = useState(() =>
         (saved?.slots ?? []).map((s) => ({ date: s.slice(0, 10), time: s.slice(11) })),
     );
@@ -491,19 +494,24 @@ function FollowUpForm({
     const slotsOk = program !== 'coaching' || (slots.length > 0 && slots.every((s) => s.time));
     const ready = slotsOk && phoneOk && birthOk && (program === 'none' || agreed === true);
 
-    const submit = async () => {
+    const submit = async (decline = false) => {
+        if (decline && !confirm(`${row.name}님을 '후속연결 X'(연락처 안 남김)로 저장할까요?`)) return;
         setState({ busy: true });
         try {
             const res = await fetch(`/api/coach/followup?id=${row.id}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    program,
-                    phone: phone.trim(),
-                    birth,
-                    slots: slots.map((s) => `${s.date}T${s.time}`),
-                    agreed: true,
-                }),
+                body: JSON.stringify(
+                    decline
+                        ? { program: 'declined' }
+                        : {
+                              program,
+                              phone: phone.trim(),
+                              birth,
+                              slots: slots.map((s) => `${s.date}T${s.time}`),
+                              agreed: true,
+                          },
+                ),
             });
             const j = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(j.error);
@@ -612,6 +620,11 @@ function FollowUpForm({
                     {saved && (
                         <span className="bg-ink px-2 py-0.5 font-label text-xs tracking-[0.08em] text-ivory">
                             신청됨 · {new Date(saved.at).toLocaleString('ko-KR')}
+                        </span>
+                    )}
+                    {declined && (
+                        <span className="border border-gold px-2 py-0.5 font-label text-xs tracking-[0.08em] text-gold">
+                            후속연결 X로 저장됨 · {new Date(declined.at).toLocaleString('ko-KR')}
                         </span>
                     )}
                 </div>
@@ -790,7 +803,7 @@ function FollowUpForm({
 
                 <div className="mt-6 flex flex-wrap items-center justify-end gap-4 print:hidden">
                     {state.error && <p className="mr-auto text-gold">{state.error}</p>}
-                    {state.done && <p className="mr-auto">✓ 신청이 저장됐어요.</p>}
+                    {state.done && <p className="mr-auto">✓ 저장됐어요.</p>}
                     {!ready && !state.error && !state.done && (
                         <p className="mr-auto text-sm text-mute">
                             {!phoneOk
@@ -808,12 +821,27 @@ function FollowUpForm({
                         type="button"
                         className="btn-main min-h-14 px-8 text-lg"
                         disabled={!ready || state.busy}
-                        onClick={submit}
+                        onClick={() => submit()}
                     >
                         {state.busy ? '저장 중…' : saved ? '신청 내용 고치기' : program === 'none' ? '연락처 남기기' : '신청하기'}
                     </button>
                 </div>
             </div>
+
+            {/* 담당자용: 참가자가 신청도, 연락처도 원하지 않을 때 */}
+            {!declined && (
+                <div className="mt-4 flex flex-wrap items-center justify-end gap-3 print:hidden">
+                    <span className="text-sm text-mute">담당자 · 참가자가 아무것도 남기지 않겠다고 하면</span>
+                    <button
+                        type="button"
+                        className="btn-soft min-h-12 border-gold px-4 text-sm text-gold"
+                        disabled={state.busy}
+                        onClick={() => submit(true)}
+                    >
+                        후속연결 X로 저장
+                    </button>
+                </div>
+            )}
         </section>
     );
 }
