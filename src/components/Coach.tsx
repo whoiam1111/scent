@@ -435,7 +435,33 @@ function Sheet({
 
 // 후속지: 툴즈 6회 자기이해 코칭 신청. 코칭존 패드에서 참가자가 직접 희망 일정을 달력에서 골라 신청한다
 const MAX_SLOTS = 3;
-const BADGE: Record<Program, string> = { coaching: '코칭 신청', reading: '독서 신청', none: '연락처만', declined: '후속 X' };
+const BADGE: Record<Program, string> = { coaching: '감정 코칭', reading: '북토크', interview: '숏 인터뷰', none: '연락처만', declined: '후속 X' };
+// 신청할 수 있는 프로그램 셋. 예전 id(coaching·reading)를 그대로 써서 이미 받은 신청도 맞게 보인다
+const PROGRAMS: [Program, string, string, string, string][] = [
+    [
+        'coaching',
+        '01',
+        '핵심감정 노트',
+        '1:1 감정 코칭',
+        '팝업 클래스에서 내 감정에 맞는 향을 골라본 것처럼, 이제는 그 감정의 이유를 들여다볼 시간이에요. 설렘, 포근함, 평온, 상쾌함 중 요즘의 나를 가장 잘 말해주는 핵심감정이 무엇인지 전문 코치와 함께 찾아보세요. 복잡한 마음은 덜어내고, 나만의 시그니처 향으로 이어지는 감정을 선명하게 정리해드립니다.',
+    ],
+    [
+        'reading',
+        '02',
+        '센트 레이어링',
+        '감정과 취향의 북토크',
+        '좋아하는 향을 겹쳐 뿌리듯, 내 감정 위에 새로운 결을 더해주는 책 이야기. 비슷한 고민을 가진 20대가 모여 책 속 장면에서 느낀 감정을 자유롭게 나눠요. 서로의 핵심감정을 향으로 이야기하며 영감을 충전하는 가장 트렌디한 네트워킹 공간입니다.',
+    ],
+    [
+        'interview',
+        '03',
+        '시그니처 프로젝트',
+        '너의 향이 다음이 돼',
+        '한 번 맡으면 잊히지 않는 잔향처럼, 오래 남는 나의 핵심감정은 무엇일까요? 클래스에서 만든 시그니처 향에 대한 솔직한 후기와 더 원하는 프로그램 이야기를 듣는 1:1 숏 인터뷰입니다. 20분간의 수다처럼 편안한 대화로 다음 시그니처 프로그램의 조향사가 되어주세요.',
+    ],
+];
+// 1:1 프로그램은 희망 일정을 받는다. 북토크는 일정을 따로 안내한다
+const SLOT_PROGRAMS: Program[] = ['coaching', 'interview'];
 const KITS = [
     ['6도형 검사', '심층 성향 파악'],
     ['인생그래프', '삶의 궤적 시각화'],
@@ -476,6 +502,8 @@ function FollowUpForm({
     const [program, setProgram] = useState<Program>(saved?.program ?? 'coaching');
     const [phone, setPhone] = useState(saved?.phone ?? '');
     const [birth, setBirth] = useState(saved?.birth?.replaceAll('-', '') ?? '');
+    const [gender, setGender] = useState(saved?.gender ?? null);
+    const [concern, setConcern] = useState(saved?.concern ?? '');
     const [agreed, setAgreed] = useState<boolean | null>(saved?.agreed ? true : null);
     const [state, setState] = useState<{ busy?: boolean; error?: string; done?: boolean }>({});
 
@@ -491,8 +519,8 @@ function FollowUpForm({
     // 생년월일 8자리, 실제 있는 날짜만 (생일 이벤트)
     const birthDate = `${birth.slice(0, 4)}-${birth.slice(4, 6)}-${birth.slice(6)}`;
     const birthOk = /^(19|20)\d{6}$/.test(birth) && new Date(`${birthDate}T00:00Z`).toISOString().startsWith(birthDate);
-    const slotsOk = program !== 'coaching' || (slots.length > 0 && slots.every((s) => s.time));
-    const ready = slotsOk && phoneOk && birthOk && (program === 'none' || agreed === true);
+    const slotsOk = !SLOT_PROGRAMS.includes(program) || (slots.length > 0 && slots.every((s) => s.time));
+    const ready = slotsOk && phoneOk && birthOk && gender !== null && (program === 'none' || agreed === true);
 
     const submit = async (decline = false) => {
         if (decline && !confirm(`${row.name}님을 '후속연결 X'(연락처 안 남김)로 저장할까요?`)) return;
@@ -508,6 +536,8 @@ function FollowUpForm({
                               program,
                               phone: phone.trim(),
                               birth,
+                              gender,
+                              concern: concern.trim(),
                               slots: slots.map((s) => `${s.date}T${s.time}`),
                               agreed: true,
                           },
@@ -629,35 +659,38 @@ function FollowUpForm({
                     )}
                 </div>
 
-                <div
-                    role="radiogroup"
-                    aria-label="신청할 프로그램"
-                    className="mt-4 grid gap-px border border-ink bg-ink sm:grid-cols-3"
-                >
-                    {(
-                        [
-                            ['coaching', '6회 자기이해 코칭', ''],
-                            ['reading', '독서 인문학 강의', ''],
-                            ['none', '신청 안 함', '연락처만 남기기'],
-                        ] as [Program, string, string][]
-                    ).map(([id, t, d]) => (
-                        <button
-                            key={id}
-                            type="button"
-                            role="radio"
-                            aria-checked={program === id}
-                            onClick={() => setProgram(id)}
-                            className={`min-h-16 px-5 py-3 text-left ${program === id ? 'bg-ink text-ivory' : 'bg-paper'}`}
-                        >
-                            <span className="block text-lg font-bold">{t}</span>
-                            <span className={`block text-sm ${program === id ? 'text-ivory/70' : 'text-mute'}`}>
-                                {d}
-                            </span>
-                        </button>
-                    ))}
+                <div role="radiogroup" aria-label="신청할 프로그램" className="mt-4">
+                    <div className="grid gap-px border border-ink bg-ink md:grid-cols-3">
+                        {PROGRAMS.map(([id, n, t, sub, d]) => (
+                            <button
+                                key={id}
+                                type="button"
+                                role="radio"
+                                aria-checked={program === id}
+                                onClick={() => setProgram(id)}
+                                className={`flex flex-col px-5 py-4 text-left ${program === id ? 'bg-ink text-ivory' : 'bg-paper'}`}
+                            >
+                                <span className={`disp-en text-xl ${program === id ? 'text-gold-light' : 'text-gold'}`}>{n}</span>
+                                <span className="mt-1 block text-lg leading-snug font-bold">{t}</span>
+                                <span className={`block font-bold ${program === id ? 'text-ivory/80' : 'text-mute'}`}>{sub}</span>
+                                <span className={`mt-2 block text-sm leading-relaxed ${program === id ? 'text-ivory/70' : 'text-mute'}`}>
+                                    {d}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
+                    <button
+                        type="button"
+                        role="radio"
+                        aria-checked={program === 'none'}
+                        onClick={() => setProgram('none')}
+                        className={`mt-2 min-h-12 w-full border px-5 text-left ${program === 'none' ? 'border-ink bg-ink text-ivory' : 'border-line bg-paper text-mute'}`}
+                    >
+                        <b>신청 안 함</b> · 연락처만 남기기
+                    </button>
                 </div>
 
-                <div className="mt-5 grid gap-x-6 gap-y-4 sm:grid-cols-3">
+                <div className="mt-5 grid gap-x-6 gap-y-4 sm:grid-cols-2">
                     <div>
                         <p className={LABEL}>이름</p>
                         <p className="mt-1 border-b border-ink pb-2 text-lg">{row.name}</p>
@@ -691,6 +724,39 @@ function FollowUpForm({
                             className="field mt-1 !text-lg tabular-nums"
                         />
                     </div>
+                    <div>
+                        <p id="fu-gender" className={LABEL}>
+                            성별
+                        </p>
+                        <div role="radiogroup" aria-labelledby="fu-gender" className="mt-1 grid grid-cols-2 border border-line">
+                            {(['남', '여'] as const).map((g) => (
+                                <button
+                                    key={g}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={gender === g}
+                                    onClick={() => setGender(g)}
+                                    className={`min-h-12 text-lg font-bold ${gender === g ? 'bg-ink text-ivory' : 'bg-paper text-mute'}`}
+                                >
+                                    {g}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="sm:col-span-2">
+                        <label htmlFor="fu-concern" className={LABEL}>
+                            요즘 고민 · 관심사 (선택, 한 줄로)
+                        </label>
+                        <input
+                            id="fu-concern"
+                            value={concern}
+                            onChange={(e) => setConcern(e.target.value)}
+                            maxLength={100}
+                            autoComplete="off"
+                            placeholder="예: 진로 고민, 사람 관계, 운동 시작하고 싶어요"
+                            className="field mt-1 !text-lg"
+                        />
+                    </div>
                 </div>
 
                 {program === 'none' ? (
@@ -700,8 +766,7 @@ function FollowUpForm({
                     </p>
                 ) : program === 'reading' ? (
                     <p className="mt-6 border-l-2 border-gold py-1 pl-4 leading-relaxed">
-                        툴즈와 로고스스튜디오가 함께하는 <b>독서 인문학 강의</b>예요. 책을 함께 읽고 나누며 나와 삶을
-                        돌아보는 시간이에요. 강의 일정과 내용은 적어 주신 연락처로 안내드려요.
+                        북토크 일정은 적어 주신 연락처로 안내드려요.
                     </p>
                 ) : (
                     <>
@@ -798,7 +863,7 @@ function FollowUpForm({
                 )}
 
                 <p className="mt-5 text-sm text-mute">
-                    적어 주신 이름·연락처·생년월일은 프로그램 안내와 생일 이벤트 연락에만 써요.
+                    적어 주신 이름·연락처·생년월일·성별·고민 내용은 프로그램 안내와 생일 이벤트 연락에만 써요.
                 </p>
 
                 <div className="mt-6 flex flex-wrap items-center justify-end gap-4 print:hidden">
@@ -810,6 +875,8 @@ function FollowUpForm({
                                 ? '연락처를 적어 주세요.'
                                 : !birthOk
                                   ? '생년월일 8자리를 적어 주세요. (예: 19990101)'
+                                  : gender === null
+                                  ? '성별을 골라 주세요.'
                                   : !slotsOk
                                   ? slots.length === 0
                                       ? '희망 날짜를 골라 주세요.'

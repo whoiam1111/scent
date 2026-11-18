@@ -18,7 +18,13 @@ const HEAD = `구분 : 향수행사
 ✔️ 당터뷰 후 바로 누적
 섭외자/성별/생년월일/연락처/인도자지역/인도자/인터뷰자/다음 만남예정일, 장소/간단정보`;
 
-const PROGRAM = { coaching: "6회 코칭 신청", reading: "독서 인문학 강의 신청", none: "신청 안 함 · 연락처만", declined: "연락처 안 남김" } as const;
+const PROGRAM = {
+  coaching: "01 핵심감정 노트(1:1 감정 코칭) 신청",
+  reading: "02 센트 레이어링(북토크) 신청",
+  interview: "03 시그니처 프로젝트(숏 인터뷰) 신청",
+  none: "신청 안 함 · 연락처만",
+  declined: "연락처 안 남김",
+} as const;
 const WEEK = "일월화수목금토";
 const slotText = (s: string) => `${+s.slice(5, 7)}.${+s.slice(8, 10)}(${WEEK[new Date(`${s.slice(0, 10)}T00:00Z`).getUTCDay()]}) ${s.slice(11)}`;
 const kstDay = (iso: string) => new Date(new Date(iso).getTime() + 9 * 3_600_000).toISOString().slice(0, 10);
@@ -32,14 +38,14 @@ export function entryLine(row: HeartRow) {
   const emotion = top.filter((x) => x.ratio === top[0].ratio && x.ratio > 0).map((x) => x.type.name).join("·");
   return [
     row.name,
-    "",
+    f.gender ?? "",
     f.birth?.replaceAll("-", "").slice(2) ?? "",
     f.phone.replace(/\D/g, "").slice(-4),
     "",
     "",
     "",
     f.slots.map(slotText).join(", "),
-    [emotion && `핵심감정 ${emotion}`, PROGRAM[f.program ?? "coaching"]].filter(Boolean).join(" · "),
+    [emotion && `핵심감정 ${emotion}`, PROGRAM[f.program ?? "coaching"], f.concern && `고민·관심사 ${f.concern}`].filter(Boolean).join(" · "),
   ].join("/");
 }
 

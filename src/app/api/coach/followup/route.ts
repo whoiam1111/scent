@@ -13,12 +13,22 @@ const birth = z
   .regex(/^(19|20)\d{6}$/)
   .transform((b) => `${b.slice(0, 4)}-${b.slice(4, 6)}-${b.slice(6)}`)
   .refine((b) => new Date(`${b}T00:00Z`).toISOString().startsWith(b) && b <= new Date().toISOString().slice(0, 10));
+const gender = z.enum(["남", "여"]);
+// 고민·관심사 한 줄. 텔레그램 누적이 / 로 칸을 나누므로 / 와 줄바꿈은 바꿔 둔다
+const concern = z
+  .string()
+  .max(100)
+  .transform((c) => c.replace(/\//g, "·").replace(/\s+/g, " ").trim())
+  .optional();
+const person = { phone, birth, gender, concern };
+const slots = z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)).min(1).max(3);
 const Body = z.discriminatedUnion("program", [
-  z.object({ program: z.literal("coaching"), phone, birth, slots: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)).min(1).max(3), agreed: z.literal(true) }),
-  // 코칭 대신 툴즈 × 로고스스튜디오 독서 인문학 강의: 일정은 따로 안내한다
-  z.object({ program: z.literal("reading"), phone, birth, agreed: z.literal(true) }),
+  // 01 핵심감정 노트 · 03 시그니처 프로젝트: 1:1이라 희망 일정을 받는다
+  z.object({ program: z.enum(["coaching", "interview"]), ...person, slots, agreed: z.literal(true) }),
+  // 02 센트 레이어링 북토크: 일정은 따로 안내한다
+  z.object({ program: z.literal("reading"), ...person, agreed: z.literal(true) }),
   // 신청은 안 하고 연락처만 남긴다
-  z.object({ program: z.literal("none"), phone, birth }),
+  z.object({ program: z.literal("none"), ...person }),
   // 아무것도 원하지 않음: 참가자가 아니라 담당자가 눌러 기록한다 (후속연결 X)
   z.object({ program: z.literal("declined") }),
 ]);
@@ -27,15 +37,17 @@ export async function POST(req: Request) {
   const id = new URL(req.url).searchParams.get("id") ?? "";
   if (!/^[0-9a-f-]{36}$/i.test(id)) return Response.json({ error: "잘못된 요청" }, { status: 400 });
   const parsed = Body.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return Response.json({ error: "연락처·생년월일·일정·주의사항 확인을 다시 봐 주세요." }, { status: 400 });
+  if (!parsed.success) return Response.json({ error: "연락처·생년월일·성별·일정·주의사항 확인을 다시 봐 주세요." }, { status: 400 });
   try {
     const d = parsed.data;
     const followup: FollowUp = {
       program: d.program,
-      phone: d.program === "declined" ? "" : d.phone,
-      birth: d.program === "declined" ? undefined : d.birth,
-      slots: d.program === "coaching" ? [...new Set(d.slots)].sort() : [],
-      agreed: d.program === "coaching" || d.program === "reading",
+      phone: "phone" in d ? d.phone : "",
+      birth: "birth" in d ? d.birth : undefined,
+      gender: "gender" in d ? d.gender : undefined,
+      concern: ("concern" in d && d.concern) || undefined,
+      slots: "slots" in d ? [...new Set(d.slots)].sort() : [],
+      agreed: "agreed" in d,
       at: new Date().toISOString(),
     };
     const row = await saveFollowUp(id, followup);

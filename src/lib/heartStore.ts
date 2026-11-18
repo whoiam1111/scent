@@ -11,8 +11,10 @@ export type SavedScent = { type: string; top: string; middle: string; base: stri
 // slots는 코칭 희망 일정 "YYYY-MM-DDTHH:mm" (현지 시각), 그 밖에는 빈 배열. none = 신청은 안 하고 연락처만
 // declined = 연락처도 안 남김 (담당자가 눌러 기록, phone은 빈 문자열)
 // birth: 생년월일 "YYYY-MM-DD" (생일 이벤트). agreed: 신청 주의사항 안내 확인 (none은 false)
-export type Program = "coaching" | "reading" | "none" | "declined";
-export type FollowUp = { program?: Program; phone: string; birth?: string; slots: string[]; agreed: boolean; at: string };
+// coaching = 01 핵심감정 노트(1:1 감정 코칭), reading = 02 센트 레이어링(북토크), interview = 03 시그니처 프로젝트(1:1 숏 인터뷰)
+export type Program = "coaching" | "reading" | "interview" | "none" | "declined";
+// gender: 남·여, concern: 고민·관심사 한 줄 (선택)
+export type FollowUp = { program?: Program; phone: string; birth?: string; gender?: "남" | "여"; concern?: string; slots: string[]; agreed: boolean; at: string };
 export type HeartRow = { id: string; code: string; name: string; checks: string[]; created_at: string; keyring_at?: string | null; scent?: SavedScent | null; followup?: FollowUp | null };
 type MemRow = HeartRow & { keyring?: Buffer };
 
