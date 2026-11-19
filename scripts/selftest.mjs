@@ -7,6 +7,7 @@ import { NOTES, SCENTS } from "../src/lib/scent.ts";
 import { guessMate } from "../src/lib/figures.ts";
 import { picturePrompt } from "../src/lib/picture.ts";
 import { covers, weightMatches } from "../src/lib/cardImage.ts";
+import { mergeBoard } from "../src/lib/board.ts";
 
 const people = categories.find((c) => c.id === "people");
 assert.equal(nextStep(people, "start", { start: "친구와 함께했던 시간" }), "scene");
@@ -97,3 +98,11 @@ assert.ok(!weightMatches("400", new Set([700])));
 assert.ok(weightMatches("100 900", new Set([300])));
 assert.ok(weightMatches("normal", new Set([400])) && weightMatches("bold", new Set([700])) && weightMatches("", new Set([400])));
 console.log("selftest ok");
+
+// 텔레그램 누적: 사람이 고쳐 올린 결과지에 새 신청만 이어 붙임 (고친 줄·직접 넣은 사람은 그대로, '#' 유무는 같은 사람)
+{
+  const base = "구분 : 향수행사\n날짜 : 11.19\n\n▪️후속연결O\n한슬기/여/920416/2342/성북/임수현/홍세라//진로 · 자취중\n#직접넣음/남////\n\n▪️후속연결 보류\n허민/남/060830/3429////연락처만\n\n▪️후속연결 X";
+  const out = mergeBoard(base, { O: ["#한슬기/여/920416/2342////진로", "#새사람/남/////신청"], 보류: [], X: ["#거절/여/////연락처 안 남김"] }).join("\n");
+  assert.equal(out, "구분 : 향수행사\n날짜 : 11.19\n\n▪️후속연결O\n한슬기/여/920416/2342/성북/임수현/홍세라//진로 · 자취중\n#직접넣음/남////\n#새사람/남/////신청\n\n▪️후속연결 보류\n허민/남/060830/3429////연락처만\n\n▪️후속연결 X\n#거절/여/////연락처 안 남김");
+  assert.equal(mergeBoard("날짜 : 11.19", { O: ["#가/남"], 보류: [], X: [] }).join("\n"), "날짜 : 11.19\n\n▪️후속연결O\n#가/남"); // 칸이 없으면 칸째로
+}

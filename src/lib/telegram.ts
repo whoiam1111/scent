@@ -1,5 +1,6 @@
 import { scoreHeart } from '@/lib/heart';
 import { getTelegramIds, listHeart, setTelegramIds, type HeartRow } from '@/lib/heartStore';
+import { groupTitle, mergeBoard } from '@/lib/board';
 
 // 코칭존 신청을 누적 양식 그대로 텔레그램 방에 쌓는다 (서버 전용). TELEGRAM_BOT_TOKEN·TELEGRAM_CHAT_ID가 없으면 아무것도 안 한다.
 // 하루(한국 시각)에 메시지 하나: 신청이 들어올 때마다 그날 신청 전체를 DB에서 다시 모아 그 메시지를 고친다.
@@ -41,7 +42,7 @@ export function entryLine(row: HeartRow) {
         .map((x) => x.type.name)
         .join('·');
     return [
-        row.name,
+        `#${row.name}`, // 시다봇 /인터뷰가 '#이름/…' 줄을 사람으로 읽는다
         f.gender ?? '',
         f.birth?.replaceAll('-', '').slice(2) ?? '',
         f.phone.replace(/\D/g, '').slice(-4),
@@ -55,28 +56,39 @@ export function entryLine(row: HeartRow) {
     ].join('/');
 }
 
-// 양식 전체를 만들고, 길면 줄 단위로 나눈다
-export function boardTexts(rows: HeartRow[]) {
+// 양식 전체를 만들고, 길면 줄 단위로 나눈다. base: 사람이 고쳐 올린 그날 결과지가 있으면 그 글에 새 신청만 이어 붙인다
+export function boardTexts(rows: HeartRow[], base?: string | null) {
     const group = (r: HeartRow) => ({ none: '보류', declined: 'X' })[r.followup!.program as string] ?? 'O';
     const pick = (g: string) => rows.filter((r) => group(r) === g).map(entryLine);
-    const lines = [
-        ...HEAD.split('\n'),
-        '',
-        '▪️후속연결O',
-        ...pick('O'),
-        '',
-        '▪️후속연결 보류',
-        ...pick('보류'),
-        '',
-        '▪️후속연결 X',
-        ...pick('X'),
-    ];
+    const gen = { O: pick('O'), 보류: pick('보류'), X: pick('X') };
+    const lines = base
+        ? mergeBoard(base, gen)
+        : [...HEAD.split('\n'), '', groupTitle('O'), ...gen.O, '', groupTitle('보류'), ...gen.보류, '', groupTitle('X'), ...gen.X];
     const out = [''];
     for (const l of lines) {
         if (out[out.length - 1].length + l.length + 1 > LIMIT) out.push('');
         out[out.length - 1] += (out[out.length - 1] ? '\n' : '') + l;
     }
     return out;
+}
+
+// 그날 결과지를 단체방에서 복사해 고쳐 올린 마지막 글 (시다봇 /board). 설정이 없거나 못 읽으면 null → 처음 양식으로
+async function editedBoard(day: string): Promise<string | null> {
+    const url = process.env.CDABOT_BOARD_URL;
+    const secret = process.env.CDABOT_BOARD_SECRET;
+    if (!url || !secret) return null;
+    try {
+        const res = await fetch(`${url}?chat=${encodeURIComponent(process.env.TELEGRAM_CHAT_ID!)}&day=${day}`, {
+            headers: { 'x-board-secret': secret },
+            cache: 'no-store',
+            signal: AbortSignal.timeout(5000),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return ((await res.json()) as { text: string | null }).text;
+    } catch (e) {
+        console.error('edited board', (e as Error).message);
+        return null;
+    }
 }
 
 async function tg(method: string, body: object) {
@@ -95,7 +107,7 @@ export async function syncTelegram(day = kstDay(new Date().toISOString())) {
         const rows = (await listHeart())
             .filter((r) => r.followup && kstDay(r.created_at) === day)
             .sort((a, b) => a.created_at.localeCompare(b.created_at));
-        const texts = boardTexts(rows);
+        const texts = boardTexts(rows, await editedBoard(day));
         // 메시지 번호 표(telegram_logs)가 없으면 매번 새 메시지로라도 보낸다
         const ids = await getTelegramIds(day).catch(
             (e) => (console.error('telegram ids', (e as Error).message), [] as number[]),
